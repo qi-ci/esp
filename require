@@ -1,0 +1,45 @@
+一. 硬件配置
+1. HTU21D
+购买链接： https://item.taobao.com/item.htm?id=630108333192&mi_id=0000DK61NPjIr3oNKu0fncP6uCmyr63IQEOLRteB7a0Uc04&spm=tbpc.boughtlist.suborder_itemtitle.1.6dbc2e8ddMj0i3
+传感器重要参数：
+
+供电电压：1.5V—3.6
+
+湿度测量范围：0—100%RH
+
+温度测量范围:-40℃—105℃
+
+最大消耗功率:2.7uW
+
+通信方式:I2C
+
+湿度精度范围（10%RH to 95%RH）:HTU20D±3%RH HTU21D±2%RH
+
+湿度迟滞：±1%RH
+
+测量时间：50ms
+
+年漂移量：-0.5%RH/year
+
+响应时间：5 s
+
+同时HTU20D、HTU21D可以和瑞士的SHT20、SHT21实现完全兼容，硬件管脚上可以实现Pin to Pin，无需修改电路板。软件程序方面也和瑞士的SHT20、SHT21相同，可以实现兼容替换，无需做出任何修改。有着很好的价格优势，极具性价比.
+2. esp32
+38PIN CP2102驱动 MICRO接口 wifi+蓝牙2合1双核CPU
+购买链接：https://item.taobao.com/item.htm?id=560873400638&mi_id=0000vsjRinvITPUQaZUiNcGw8M2cMIi-RmDJck0htK33n18&skuId=5772093139157&spm=tbpc.boughtlist.suborder_itempic.d560873400638.6dbc2e8ddMj0i3
+3. ZE08-CH2O
+购买链接： https://item.taobao.com/item.htm?id=596914322238&mi_id=0000ezcIKQOTP0FxFHWQkqw0Ij0td1F8JMpuGP-t24QmKwg&spm=tbpc.boughtlist.suborder_itemtitle.1.6dbc2e8ddMj0i3
+产品说明书： https://www.winsen-sensor.com/d/files/PDF/Gas%20Sensor%20Module/Formaldehyde%20Detection%20Module/ZE08-CH2O%20V1.0.pdf
+4. S8 0053 促销原装瑞典senseAir红外CO2模块
+产品链接： https://item.taobao.com/item.htm?id=536912586743&mi_id=0000rwOnVyqGxVFfvuhXLpsOz92Z1QjOyUzoGrgB-HLmk7s&spm=tbpc.boughtlist.suborder_itemtitle.1.6dbc2e8ddMj0i3
+产品说明书：https://rmtplusstoragesenseair.blob.core.windows.net/docs/publicerat/PSP126.pdf
+二，需求
+1. 需要一个esp传感仪，并传输传感器数据到手机app上，app功能是读取温度、湿度、甲醛浓度、二氧化碳浓度，app页面需要有时间地点定位，时间可选时区，地点要有经纬度和国家城市，app需要有更新传感器数据按钮，每个传感器数据更新按钮分开，app要能存储历史传感器记录，并能分日月读取
+2. esp32的代码和app的代码分开，各建立一个文件，选取合适的代码语言
+3. 每个传感器的数据更新方式包括两种：1.自动更新（更新频率根据下一条需求），2.在app上按键手动更新
+4. 传感器代码设计需要关注使用寿命，根据使用使用寿命设计能让传感器使用更低功耗的方案，考虑温度等你觉得必要的影响传感器寿命的因素，使用方案推荐给我选择及确认，类似数据采集频率、夜晚休眠等工作机制
+5. 传感器代码设计需要关注传感器引脚输入输出电压，匹配esp32输入输出电压，必要时可以引入电平转换模块，给出各传感器引脚和esp32引脚的连接线路集合图
+6. 三个传感器和esp32引脚连接时关注通信协议，确定通行协议匹配
+7. 我对传感仪领域不了解，是否还有其他优化方向，提出优化方案
+8. 此传感仪只个人用来检测家庭、办公室的环境数据，app中不需要用户登陆等功能，要打开即用
+9. 现在只生成产品说明书，不生成具体esp和app代码，等产品方案确认后生成代码
