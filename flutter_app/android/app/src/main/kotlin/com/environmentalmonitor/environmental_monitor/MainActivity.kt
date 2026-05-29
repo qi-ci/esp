@@ -1,6 +1,6 @@
-package com.environmentalmonitor.environmental_monitor;
+package com.environmentalmonitor.environmental_monitor
 
-import io.flutter.embedding.android.FlutterActivity;
+import io.flutter.embedding.android.FlutterActivity
 
-public class MainActivity extends FlutterActivity {
+class MainActivity: FlutterActivity() {
 }
