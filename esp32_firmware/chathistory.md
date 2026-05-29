@@ -1,4 +1,4 @@
-argument of type "uint32_t *" (aka "unsigned int *") is incompatible with parameter of type "const time_t *"报错是因为什么
+# argument of type "uint32_t *" (aka "unsigned int *") is incompatible with parameter of type "const time_t *"报错是因为什么
 
 这个错误是因为 `localtime()` 函数期望的参数类型是 `const time_t *`（指向时间戳的指针），但代码中传入的是 `uint32_t *`（无符号32位整数指针）。
 
@@ -165,6 +165,7 @@ pio run
 
 然后告诉我输出的错误信息，我会根据具体错误继续修复！
 
+
 让我检查一下当前的编译错误：
 
 
@@ -288,7 +289,8 @@ argument of type "uint32_t *" is incompatible with parameter of type "const time
 ![alt text](image.png)
 
 
-build后 * Executing task: platformio run
+# build后 Error: Nothing to build. Please put your source code files to the '/data/info/esp/esp32_firmware/src' folder
+* Executing task: platformio run
 
 Processing esp32dev (platform: espressif32; board: esp32dev; framework: arduino)
 Verbose mode can be enabled via -v, --verbose option CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html PLATFORM: Espressif 32 (7.0.1) > Espressif ESP32 Dev Module HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa) PACKAGES:
@@ -397,7 +399,7 @@ PlatformIO 要求项目遵循标准目录结构：
 ```bash
 ~/.platformio/penv/bin/platformio run --target upload
 ```
-
+# Try to add user into dialout or uucp group.
 acorus@ubuntu:/data/info/esp/esp32_firmware$ ~/.platformio/penv/bin/platformio run --target upload
 Processing esp32dev (platform: espressif32; board: esp32dev; framework: arduino)
 -------------------------------------------------------------------------------------------------------------------------------------------
@@ -554,6 +556,8 @@ sudo usermod -a -G dialout $USER
 
 请先完成步骤1的密码输入，然后**务必重新登录系统**后再尝试上传！
 
+
+# A fatal error occurred: Unable to verify flash chip connection (No serial data received.).*** [upload] Error 2
 acorus@ubuntu:/data/info/esp/esp32_firmware$ ~/.platformio/penv/bin/platformio run --target upload
 Processing esp32dev (platform: espressif32; board: esp32dev; framework: arduino)
 -------------------------------------------------------------------------------------------------------------------------------------------
@@ -730,6 +734,7 @@ sudo service udev restart
 
 现在请尝试重新上传，如果还有问题，请告诉我具体的错误信息！
 
+# SUCCESS
 acorus@ubuntu:/data/info/esp/esp32_firmware$ ~/.platformio/penv/bin/platformio run --target upload
 Processing esp32dev (platform: espressif32; board: esp32dev; framework: arduino)
 -------------------------------------------------------------------------------------------------------------------------------------------
