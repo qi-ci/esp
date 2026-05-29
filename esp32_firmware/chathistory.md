@@ -398,3 +398,533 @@ PlatformIO 要求项目遵循标准目录结构：
 ~/.platformio/penv/bin/platformio run --target upload
 ```
 
+acorus@ubuntu:/data/info/esp/esp32_firmware$ ~/.platformio/penv/bin/platformio run --target upload
+Processing esp32dev (platform: espressif32; board: esp32dev; framework: arduino)
+-------------------------------------------------------------------------------------------------------------------------------------------
+Tool Manager: Installing platformio/tool-mkspiffs @ ~2.230.0
+Downloading  [####################################]  100%
+Unpacking  [####################################]  100%
+Tool Manager: tool-mkspiffs@2.230.0 has been installed!
+Tool Manager: Installing platformio/tool-mklittlefs @ ~1.203.0
+Downloading  [####################################]  100%
+Unpacking  [####################################]  100%
+Tool Manager: tool-mklittlefs@1.203.210628 has been installed!
+Tool Manager: Installing platformio/tool-mkfatfs @ ~2.0.0
+Downloading  [####################################]  100%
+Unpacking  [####################################]  100%
+Tool Manager: tool-mkfatfs@2.0.1 has been installed!
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (7.0.1) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20005.220925 (2.0.5) 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - tool-mkfatfs @ 2.0.1 
+ - tool-mklittlefs @ 1.203.210628 (2.3) 
+ - tool-mkspiffs @ 2.230.0 (2.30) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+Converting main.ino
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 32 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire @ 2.0.0
+|-- HTTPClient @ 2.0.0
+|-- Preferences @ 2.0.0
+|-- WiFi @ 2.0.0
+Building in release mode
+Compiling .pio/build/esp32dev/src/main.ino.cpp.o
+Retrieving maximum program size .pio/build/esp32dev/firmware.elf
+Checking size .pio/build/esp32dev/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  12.3% (used 40228 bytes from 327680 bytes)
+Flash: [=======   ]  68.8% (used 901969 bytes from 1310720 bytes)
+Configuring upload protocol...
+AVAILABLE: cmsis-dap, esp-bridge, esp-prog, espota, esptool, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa
+CURRENT: upload_protocol = esptool
+Looking for upload port...
+
+Warning! Please install `99-platformio-udev.rules`. 
+More details: https://docs.platformio.org/en/latest/core/installation/udev-rules.html
+
+Auto-detected: /dev/ttyUSB0
+Uploading .pio/build/esp32dev/firmware.bin
+esptool.py v4.11.0
+Serial port /dev/ttyUSB0
+
+A fatal error occurred: Could not open /dev/ttyUSB0, the port is busy or doesn't exist.
+([Errno 13] could not open port /dev/ttyUSB0: [Errno 13] Permission denied: '/dev/ttyUSB0')
+
+Hint: Try to add user into dialout or uucp group.
+
+*** [upload] Error 2
+======================================================= [FAILED] Took 17.60 seconds =======================================================
+
+这个错误是因为**权限不足**，无法访问串口设备 `/dev/ttyUSB0`。
+
+## 问题原因
+
+ESP32 开发板通过 USB 连接到电脑后，会创建串口设备文件（如 `/dev/ttyUSB0`），但当前用户没有权限访问该设备。
+
+## 解决方案
+
+根据错误提示，需要将当前用户添加到 `dialout` 或 `uucp` 组中。请按以下步骤操作：
+
+### 方法1：添加用户到 dialout 组（推荐）
+
+
+
+```toolCall::run_in_terminal::call_9a74c28500da4368b08979c2::INIT
+```
+
+好的，命令需要 sudo 密码。让我提供完整的解决步骤：
+
+## 🔧 解决串口权限问题的完整步骤
+
+### 步骤1：添加用户到 dialout 组
+
+在终端中执行以下命令（需要输入您的密码）：
+
+```bash
+sudo usermod -a -G dialout $USER
+```
+
+### 步骤2：重新登录或重启
+
+**重要**：添加用户到组后，必须**注销并重新登录**，或者**重启系统**才能使更改生效。
+
+您可以选择：
+- **快速方式**：注销当前用户会话，然后重新登录
+- **彻底方式**：重启电脑 `sudo reboot`
+
+### 步骤3：验证权限
+
+重新登录后，在终端执行：
+
+```bash
+groups
+```
+
+确认输出中包含 `dialout`。new
+
+### 步骤4：重新上传固件
+
+权限生效后，再次执行上传命令：
+
+```bash
+~/.platformio/penv/bin/platformio run --target upload
+```
+
+---
+
+## 📝 其他注意事项
+
+如果上述方法不起作用，还可以尝试：
+
+### 临时解决方案（仅当前会话有效）
+
+```bash
+sudo chmod 666 /dev/ttyUSB0
+```
+
+但这只是临时方案，每次插拔设备后都需要重新执行。
+
+### 安装 udev 规则（永久解决方案）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core/master/scripts/99-platformio-udev.rules | sudo tee /etc/udev/rules.d/99-platformio-udev.rules
+sudo service udev restart
+sudo usermod -a -G dialout $USER
+```
+
+---
+
+## ✅ 总结
+
+**当前问题**：权限不足导致无法访问 `/dev/ttyUSB0`
+
+**解决步骤**：
+1. ✅ 执行 `sudo usermod -a -G dialout $USER`（已提示输入密码）
+2. ⏳ **重新登录或重启系统**（必须！）
+3. ⏳ 验证权限：运行 `groups` 查看是否包含 `dialout`
+4. ⏳ 重新执行上传命令
+
+请先完成步骤1的密码输入，然后**务必重新登录系统**后再尝试上传！
+
+acorus@ubuntu:/data/info/esp/esp32_firmware$ ~/.platformio/penv/bin/platformio run --target upload
+Processing esp32dev (platform: espressif32; board: esp32dev; framework: arduino)
+-------------------------------------------------------------------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (7.0.1) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20005.220925 (2.0.5) 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - tool-mkfatfs @ 2.0.1 
+ - tool-mklittlefs @ 1.203.210628 (2.3) 
+ - tool-mkspiffs @ 2.230.0 (2.30) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+Converting main.ino
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 32 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire @ 2.0.0
+|-- HTTPClient @ 2.0.0
+|-- Preferences @ 2.0.0
+|-- WiFi @ 2.0.0
+Building in release mode
+Compiling .pio/build/esp32dev/src/main.ino.cpp.o
+Retrieving maximum program size .pio/build/esp32dev/firmware.elf
+Checking size .pio/build/esp32dev/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  12.3% (used 40228 bytes from 327680 bytes)
+Flash: [=======   ]  68.8% (used 901969 bytes from 1310720 bytes)
+Configuring upload protocol...
+AVAILABLE: cmsis-dap, esp-bridge, esp-prog, espota, esptool, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa
+CURRENT: upload_protocol = esptool
+Looking for upload port...
+
+Warning! Please install `99-platformio-udev.rules`. 
+More details: https://docs.platformio.org/en/latest/core/installation/udev-rules.html
+
+Auto-detected: /dev/ttyUSB0
+Uploading .pio/build/esp32dev/firmware.bin
+esptool.py v4.11.0
+Serial port /dev/ttyUSB0
+Connecting..............
+Chip is ESP32-D0WD-V3 (revision v3.1)
+Features: WiFi, BT, Dual Core, 240MHz, VRef calibration in efuse, Coding Scheme None
+WARNING: Detected crystal freq 15.67MHz is quite different to normalized freq 26MHz. Unsupported crystal in use?
+Crystal is 26MHz
+MAC: ec:e3:34:46:77:8c
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 921600
+Changed.
+
+A fatal error occurred: Unable to verify flash chip connection (No serial data received.).
+*** [upload] Error 2
+======================================================= [FAILED] Took 7.75 seconds =======================================================
+
+这个错误是**串口通信问题**，不是编译错误。编译已经成功了！
+
+## 错误分析
+
+```
+A fatal error occurred: Unable to verify flash chip connection (No serial data received.)
+```
+
+这个问题通常由以下原因导致：
+
+1. **ESP32 未进入下载模式**（最常见）
+2. 串口连接不稳定
+3. 波特率过高导致通信失败
+4. USB 线缆或端口问题
+
+## 解决方案
+
+### 方案1：手动进入下载模式（推荐）
+
+在上传时，按照以下步骤操作：
+
+1. **按住 ESP32 板上的 BOOT 按钮**
+2. **按一下 EN/RST 按钮**（重启）
+3. **松开 BOOT 按钮**
+4. 立即执行上传命令
+
+或者更简单的方法：
+- 在执行 `platformio run --target upload` 命令后，看到 "Connecting..." 时，**按住 BOOT 按钮直到开始上传**
+
+### 方案2：降低上传波特率
+
+当前配置的上传速度是 921600，可能太高了。让我修改配置文件：
+
+
+
+```toolCall::edit_file::call_c5ae13747e594d78b06c311c::INIT
+```
+
+### 方案3：添加上传前的复位策略
+
+
+
+```toolCall::edit_file::call_cf2c0f109e014e3a96975d2e::INIT
+```
+
+现在让我查看完整的配置文件确认修改：
+
+
+
+```toolCall::read_file::call_2708fd8805054bdab732d468::INIT
+```
+
+很好！现在请尝试重新上传：
+
+
+
+```toolCall::run_in_terminal::call_9c37740511df48a1aeb46174::INIT
+```
+
+## 总结
+
+我已经为你做了以下优化来解决上传问题：
+
+### ✅ 已完成的修改
+
+1. **降低上传波特率**：从 921600 降至 115200
+   - 更高的稳定性
+   - 减少通信错误
+
+2. **添加复位策略**：`upload_resetmethod = nodemcu`
+   - 帮助 ESP32 自动进入下载模式
+
+### 🔧 如果仍然失败，请尝试以下方法：
+
+#### 方法A：手动进入下载模式
+执行上传命令时：
+```bash
+~/.platformio/penv/bin/platformio run --target upload
+```
+当看到 "Connecting..." 时，**按住 BOOT 按钮**直到开始上传。
+
+#### 方法B：检查硬件连接
+- 确保 USB 线缆支持数据传输（不仅仅是充电）
+- 尝试更换 USB 端口
+- 检查串口设备是否正确识别：
+  ```bash
+  ls -l /dev/ttyUSB*
+  ```
+
+#### 方法C：使用 esptool 直接上传
+```bash
+# 先编译
+~/.platformio/penv/bin/platformio run
+
+# 然后手动上传（需要按住BOOT按钮）
+esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 115200 write_flash -z 0x10000 .pio/build/esp32dev/firmware.bin
+```
+
+#### 方法D：安装 udev 规则（解决权限警告）
+```bash
+# 下载并安装 PlatformIO udev 规则
+curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core/master/scripts/99-platformio-udev.rules | sudo tee /etc/udev/rules.d/99-platformio-udev.rules
+
+# 重启 udev 服务
+sudo service udev restart
+
+# 重新插拔 USB 设备
+```
+
+### 📊 编译状态
+✅ **编译成功**！固件已经正确生成：
+- RAM 使用：12.3% (40,228 / 327,680 bytes)
+- Flash 使用：68.8% (901,969 / 1,310,720 bytes)
+
+现在请尝试重新上传，如果还有问题，请告诉我具体的错误信息！
+
+acorus@ubuntu:/data/info/esp/esp32_firmware$ ~/.platformio/penv/bin/platformio run --target upload
+Processing esp32dev (platform: espressif32; board: esp32dev; framework: arduino)
+-------------------------------------------------------------------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (7.0.1) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20005.220925 (2.0.5) 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - tool-mkfatfs @ 2.0.1 
+ - tool-mklittlefs @ 1.203.210628 (2.3) 
+ - tool-mkspiffs @ 2.230.0 (2.30) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+Converting main.ino
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 32 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire @ 2.0.0
+|-- HTTPClient @ 2.0.0
+|-- Preferences @ 2.0.0
+|-- WiFi @ 2.0.0
+Building in release mode
+Compiling .pio/build/esp32dev/src/main.ino.cpp.o
+Building .pio/build/esp32dev/bootloader.bin
+Generating partitions .pio/build/esp32dev/partitions.bin
+Compiling .pio/build/esp32dev/lib81f/Wire/Wire.cpp.o
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 1 ELF section
+Successfully created esp32 image.
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFi.cpp.o
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFiAP.cpp.o
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFiClient.cpp.o
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFiGeneric.cpp.o
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFiMulti.cpp.o
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFiSTA.cpp.o
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFiScan.cpp.o
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFiServer.cpp.o
+Compiling .pio/build/esp32dev/lib02f/WiFi/WiFiUdp.cpp.o
+Compiling .pio/build/esp32dev/lib2a5/WiFiClientSecure/WiFiClientSecure.cpp.o
+Archiving .pio/build/esp32dev/lib81f/libWire.a
+Indexing .pio/build/esp32dev/lib81f/libWire.a
+Compiling .pio/build/esp32dev/lib2a5/WiFiClientSecure/esp_crt_bundle.c.o
+Compiling .pio/build/esp32dev/lib2a5/WiFiClientSecure/ssl_client.cpp.o
+Compiling .pio/build/esp32dev/lib5dc/HTTPClient/HTTPClient.cpp.o
+Compiling .pio/build/esp32dev/libad5/Preferences/Preferences.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/Esp.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/FirmwareMSC.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/FunctionalInterrupt.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/HWCDC.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/HardwareSerial.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/IPAddress.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/IPv6Address.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/MD5Builder.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/Print.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/Stream.cpp.o
+Archiving .pio/build/esp32dev/lib02f/libWiFi.a
+Indexing .pio/build/esp32dev/lib02f/libWiFi.a
+Compiling .pio/build/esp32dev/FrameworkArduino/StreamString.cpp.o
+Archiving .pio/build/esp32dev/lib2a5/libWiFiClientSecure.a
+Indexing .pio/build/esp32dev/lib2a5/libWiFiClientSecure.a
+Compiling .pio/build/esp32dev/FrameworkArduino/Tone.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/USB.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/USBCDC.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/USBMSC.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/WMath.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/WString.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/base64.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/cbuf.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-adc.c.o
+Archiving .pio/build/esp32dev/libad5/libPreferences.a
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-bt.c.o
+Indexing .pio/build/esp32dev/libad5/libPreferences.a
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-cpu.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-dac.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-gpio.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-i2c-slave.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-i2c.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-ledc.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-matrix.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-misc.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-psram.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-rgb-led.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-rmt.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-sigmadelta.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-spi.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-time.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-timer.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-tinyusb.c.o
+Archiving .pio/build/esp32dev/lib5dc/libHTTPClient.a
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-touch.c.o
+Indexing .pio/build/esp32dev/lib5dc/libHTTPClient.a
+Compiling .pio/build/esp32dev/FrameworkArduino/esp32-hal-uart.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/firmware_msc_fat.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/libb64/cdecode.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/libb64/cencode.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/main.cpp.o
+Compiling .pio/build/esp32dev/FrameworkArduino/stdlib_noniso.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/wiring_pulse.c.o
+Compiling .pio/build/esp32dev/FrameworkArduino/wiring_shift.c.o
+Archiving .pio/build/esp32dev/libFrameworkArduino.a
+Indexing .pio/build/esp32dev/libFrameworkArduino.a
+Linking .pio/build/esp32dev/firmware.elf
+Retrieving maximum program size .pio/build/esp32dev/firmware.elf
+Checking size .pio/build/esp32dev/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  12.3% (used 40228 bytes from 327680 bytes)
+Flash: [=======   ]  68.8% (used 901969 bytes from 1310720 bytes)
+Building .pio/build/esp32dev/firmware.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 25 ELF sections
+Successfully created esp32 image.
+Configuring upload protocol...
+AVAILABLE: cmsis-dap, esp-bridge, esp-prog, espota, esptool, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa
+CURRENT: upload_protocol = esptool
+Looking for upload port...
+
+Warning! Please install `99-platformio-udev.rules`. 
+More details: https://docs.platformio.org/en/latest/core/installation/udev-rules.html
+
+Auto-detected: /dev/ttyUSB0
+Uploading .pio/build/esp32dev/firmware.bin
+esptool.py v4.11.0
+Serial port /dev/ttyUSB0
+Connecting.....
+Chip is ESP32-D0WD-V3 (revision v3.1)
+Features: WiFi, BT, Dual Core, 240MHz, VRef calibration in efuse, Coding Scheme None
+Crystal is 40MHz
+MAC: ec:e3:34:46:77:8c
+Uploading stub...
+Running stub...
+Stub running...
+Configuring flash size...
+Flash will be erased from 0x00001000 to 0x00005fff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+Flash will be erased from 0x0000e000 to 0x0000ffff...
+Flash will be erased from 0x00010000 to 0x000edfff...
+SHA digest in image updated
+Compressed 17440 bytes to 12128...
+Writing at 0x00001000... (100 %)
+Wrote 17440 bytes (12128 compressed) at 0x00001000 in 1.2 seconds (effective 119.4 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 128...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (128 compressed) at 0x00008000 in 0.0 seconds (effective 850.3 kbit/s)...
+Hash of data verified.
+Compressed 8192 bytes to 47...
+Writing at 0x0000e000... (100 %)
+Wrote 8192 bytes (47 compressed) at 0x0000e000 in 0.0 seconds (effective 1684.3 kbit/s)...
+Hash of data verified.
+Compressed 907744 bytes to 580950...
+Writing at 0x00010000... (2 %)
+Writing at 0x0001c3fc... (5 %)
+Writing at 0x000267e5... (8 %)
+Writing at 0x00034227... (11 %)
+Writing at 0x0003e3b9... (13 %)
+Writing at 0x00044118... (16 %)
+Writing at 0x00049be0... (19 %)
+Writing at 0x0004f503... (22 %)
+Writing at 0x0005496c... (25 %)
+Writing at 0x0005a16d... (27 %)
+Writing at 0x0005f453... (30 %)
+Writing at 0x000645a9... (33 %)
+Writing at 0x00069967... (36 %)
+Writing at 0x0006ebf0... (38 %)
+Writing at 0x00073d09... (41 %)
+Writing at 0x00078ef6... (44 %)
+Writing at 0x0007e0c0... (47 %)
+Writing at 0x000831bd... (50 %)
+Writing at 0x00088dff... (52 %)
+Writing at 0x0008e3ce... (55 %)
+Writing at 0x0009396b... (58 %)
+Writing at 0x00098d88... (61 %)
+Writing at 0x0009dea6... (63 %)
+Writing at 0x000a32e8... (66 %)
+Writing at 0x000a86a9... (69 %)
+Writing at 0x000adc8a... (72 %)
+Writing at 0x000b345e... (75 %)
+Writing at 0x000b938f... (77 %)
+Writing at 0x000bed0b... (80 %)
+Writing at 0x000c4432... (83 %)
+Writing at 0x000cca07... (86 %)
+Writing at 0x000d55dc... (88 %)
+Writing at 0x000da985... (91 %)
+Writing at 0x000e042b... (94 %)
+Writing at 0x000e57b4... (97 %)
+Writing at 0x000eb125... (100 %)
+Wrote 907744 bytes (580950 compressed) at 0x00010000 in 51.2 seconds (effective 141.9 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...
+====================================================== [SUCCESS] Took 64.02 seconds ======================================================
