@@ -251,7 +251,11 @@ void task_sensor_collect(void *pvParameters) {
         check_sensor_maintenance();
 
         // 动态调整采样间隔(节能模式)
-        int hour = localtime(&data.timestamp)->tm_hour;
+        time_t now;
+        struct tm timeinfo;
+        time(&now);
+        localtime_r(&now, &timeinfo);
+        int hour = timeinfo.tm_hour;
         bool is_night = (hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR);
         TickType_t interval = is_night ? NIGHT_INTERVAL : NORMAL_INTERVAL;
 
