@@ -40,8 +40,8 @@
 #define LED_PIN         2   // 板载LED
 
 // ==================== WiFi配置 ====================
-const char* WIFI_SSID = "Your_WiFi_SSID";
-const char* WIFI_PASSWORD = "Your_WiFi_Password";
+const char* WIFI_SSID = "airsensors";
+const char* WIFI_PASSWORD = "ichbinacorus";
 const uint16_t SERVER_PORT = 8080;
 
 // ==================== 功耗模式配置 (方案B: 节能模式) ====================
