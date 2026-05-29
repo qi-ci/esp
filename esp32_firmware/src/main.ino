@@ -40,8 +40,8 @@
 #define LED_PIN         2   // 板载LED
 
 // ==================== WiFi配置 ====================
-const char* WIFI_SSID = "airsensors";
-const char* WIFI_PASSWORD = "ichbinacorus";
+const char* WIFI_SSID = "211";
+const char* WIFI_PASSWORD = "yxmy2025";
 const uint16_t SERVER_PORT = 8080;
 
 // ==================== 功耗模式配置 (方案B: 节能模式) ====================
@@ -181,19 +181,36 @@ void setup_wifi() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     int retry = 0;
-    while (WiFi.status() != WL_CONNECTED && retry < 20) {
+    const int max_retries = 30;  // 增加到30次尝试（15秒）
+    
+    while (WiFi.status() != WL_CONNECTED && retry < max_retries) {
         delay(500);
         Serial.print(".");
         retry++;
+        
+        // 每5次打印一次状态
+        if (retry % 5 == 0) {
+            Serial.printf("\n[WiFi] Attempt %d/%d, Status: %d\n", retry, max_retries, WiFi.status());
+        }
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\nWiFi connected!");
+        Serial.println("\n✅ WiFi connected!");
         Serial.print("IP address: ");
         Serial.println(WiFi.localIP());
+        Serial.print("Signal strength (RSSI): ");
+        Serial.print(WiFi.RSSI());
+        Serial.println(" dBm");
         xEventGroupSetBits(event_group, EVENT_WIFI_CONNECTED);
     } else {
-        Serial.println("\nWiFi connection failed!");
+        Serial.println("\n❌ WiFi connection failed!");
+        Serial.print("Final status code: ");
+        Serial.println(WiFi.status());
+        Serial.println("\nPossible reasons:");
+        Serial.println("1. Wrong password");
+        Serial.println("2. SSID not found");
+        Serial.println("3. Router rejected connection");
+        Serial.println("4. Too many devices connected");
     }
 }
 

@@ -1,5 +1,7 @@
 name: environmental_monitor
-description: ESP32环境监测仪手机APP - 打开即用,无需登录
+description: ESP32环境监测仪手机APP - 实时监测温度、湿度、甲醛、CO2
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
 version: 1.0.0+1
 
 environment:
@@ -30,13 +32,15 @@ dependencies:
   
   # 时间处理
   intl: ^0.18.1
-  timezone: ^0.9.2
   
   # 通知
   flutter_local_notifications: ^16.1.0
   
   # 权限
   permission_handler: ^11.0.1
+  
+  # 状态管理
+  provider: ^6.1.1
 
 dev_dependencies:
   flutter_test:
@@ -46,10 +50,14 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   
+  # 资源文件
+  assets:
+    - assets/images/
+  
   # 字体
-  fonts:
-    - family: Roboto
-      fonts:
-        - asset: assets/fonts/Roboto-Regular.ttf
-        - asset: assets/fonts/Roboto-Bold.ttf
-          weight: 700
+  # fonts:
+  #   - family: Roboto
+  #     fonts:
+  #       - asset: assets/fonts/Roboto-Regular.ttf
+  #       - asset: assets/fonts/Roboto-Bold.ttf
+  #         weight: 700
