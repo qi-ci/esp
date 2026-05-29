@@ -449,3 +449,199 @@ minicom -D /dev/ttyUSB0 -b 115200
 ---
 
 **祝您排查顺利! 🎉**
+
+## 🔧 ZE08 甲醛传感器调试指南
+
+### 问题现象
+
+```
+[ZE08] Retry 1/5...
+[ZE08] Retry 2/5...
+[ERROR] ZE08 read failed after retries!
+```
+
+### 可能原因
+
+1. **预热时间不足** - ZE08 需要至少 3 分钟预热
+2. **接线错误** - TX/RX 接反或电源电压不对
+3. **UART 通信问题** - 波特率不匹配或引脚配置错误
+4. **传感器故障** - 硬件损坏
+
+---
+
+### 解决方案
+
+#### ✅ 方案 1：等待预热（已实施）
+
+代码已增加 5 秒 UART 稳定等待，但完全稳定需要 3 分钟。
+
+**操作：**
+- 上传固件后等待 3-5 分钟
+- 观察后续的数据采集周期（每 15 分钟一次）
+- 第二次或第三次采集时可能会成功
+
+---
+
+#### ✅ 方案 2：检查硬件接线
+
+**正确接线：**
+
+| ESP32 引脚 | ZE08 引脚 | 线色（常见） |
+|-----------|----------|------------|
+| GPIO 16 (RX2) | TX | 绿色 |
+| GPIO 17 (TX2) | RX | 白色 |
+| 5V | VCC | 红色 |
+| GND | GND | 黑色 |
+
+**检查步骤：**
+1. 确认 TX 和 RX **没有接反**（最常见错误）
+2. 确认使用 **5V 供电**（不是 3.3V）
+3. 确认地线连接良好
+4. 检查杜邦线是否松动或损坏
+
+---
+
+#### ✅ 方案 3：手动测试 ZE08
+
+创建测试文件 `test_ze08.ino`：
+
+```cpp
+#include <HardwareSerial.h>
+
+HardwareSerial SerialZE08(2);  // 使用 UART2
+
+void setup() {
+    Serial.begin(115200);
+    delay(2000);
+    
+    Serial.println("\nZE08 Test Starting...");
+    
+    // 初始化 UART2 (GPIO 16=RX, 17=TX)
+    SerialZE08.begin(9600, SERIAL_8N1, 16, 17);
+    
+    // 等待传感器预热
+    Serial.println("Waiting for sensor warmup (60 seconds)...");
+    for (int i = 60; i > 0; i--) {
+        delay(1000);
+        if (i % 10 == 0) {
+            Serial.printf("%d...", i);
+        }
+    }
+    Serial.println("\nWarmup complete!");
+    
+    // 清空缓冲区
+    while (SerialZE08.available()) {
+        SerialZE08.read();
+    }
+}
+
+void loop() {
+    // 检查是否有数据
+    if (SerialZE08.available() >= 9) {
+        uint8_t buffer[9];
+        
+        // 读取帧头
+        if (SerialZE08.read() == 0xFF && SerialZE08.read() == 0x17) {
+            buffer[0] = 0xFF;
+            buffer[1] = 0x17;
+            
+            // 读取剩余数据
+            for (int i = 2; i < 9; i++) {
+                buffer[i] = SerialZE08.read();
+            }
+            
+            // 验证帧尾
+            if (buffer[7] == 0xFF && buffer[8] == 0xFF) {
+                // 解析甲醛浓度
+                uint8_t high = buffer[4];
+                uint8_t low = buffer[5];
+                float hcho = ((uint16_t)high * 256 + low) / 1000.0;
+                
+                // 校验和
+                uint8_t sum = 0;
+                for (int i = 0; i < 6; i++) {
+                    sum += buffer[i];
+                }
+                
+                Serial.printf("HCHO: %.3f ppm | Checksum: %s\n", 
+                             hcho, (sum == buffer[6]) ? "OK" : "FAIL");
+                
+                // 打印原始数据
+                Serial.print("Raw: ");
+                for (int i = 0; i < 9; i++) {
+                    Serial.printf("0x%02X ", buffer[i]);
+                }
+                Serial.println();
+            }
+        }
+    }
+    
+    delay(100);
+}
+```
+
+**预期输出：**
+```
+ZE08 Test Starting...
+Waiting for sensor warmup (60 seconds)...
+60...50...40...30...20...10...
+Warmup complete!
+HCHO: 0.050 ppm | Checksum: OK
+Raw: 0xFF 0x17 0x04 0x00 0x00 0x32 0x3B 0xFF 0xFF
+```
+
+---
+
+#### ✅ 方案 4：检查 UART 通信
+
+在现有代码中添加调试信息（已完成）：
+
+```
+[ZE08 Debug] UART2 available bytes: X
+```
+
+- 如果显示 `0`：说明没有数据到达，检查接线
+- 如果显示 `>0` 但仍失败：可能是数据格式问题
+
+---
+
+### 常见问题
+
+**Q1: 为什么 S8 可以工作但 ZE08 不行？**
+
+A: 两个传感器使用不同的 UART 端口：
+- S8 使用 UART1 (GPIO 4/5)
+- ZE08 使用 UART2 (GPIO 16/17)
+
+可能是 ZE08 的接线有问题，或者传感器本身故障。
+
+---
+
+**Q2: ZE08 需要多久才能稳定？**
+
+A: 
+- 官方建议：3 分钟预热
+- 最佳性能：连续运行 24 小时后
+- 每次上电都需要重新预热
+
+---
+
+**Q3: 能否跳过 ZE08 继续使用其他传感器？**
+
+A: 可以！代码已经实现了优雅降级：
+```
+[WARN] Some sensors failed, continuing with partial data
+```
+
+系统会继续采集 HTU21D 和 S8 的数据。
+
+---
+
+### 联系支持
+
+如果以上步骤都无法解决，请提供：
+
+1. **接线照片** - 清晰显示 ESP32 和 ZE08 的连接
+2. **测试代码输出** - 运行上述测试代码的完整输出
+3. **万用表测量** - 确认 ZE08 VCC 引脚电压为 5V
+4. **替换测试** - 如有条件，尝试另一个 ZE08 传感器

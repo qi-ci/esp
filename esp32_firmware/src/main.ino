@@ -42,13 +42,8 @@
 // ==================== WiFi配置 ====================
 const char* WIFI_SSID = "TPGuest_3BD4";
 const char* WIFI_PASSWORD = "yxmy211609";
+const char* SERVER_IP = "192.168.0.100";  // 修改为您的 APP/服务器 IP 地址
 const uint16_t SERVER_PORT = 8080;
-
-// 服务器配置（可根据实际情况修改）
-// 选项1: 使用广播地址自动发现（推荐用于开发测试）
-// 选项2: 指定具体的服务器 IP
-#define USE_BROADCAST_DISCOVERY true  // 设置为 false 时使用固定 IP
-const char* SERVER_IP = "192.168.0.100";  // 修改为您的 APP 服务器实际 IP
 
 // ==================== 功耗模式配置 (方案B: 节能模式) ====================
 #define NORMAL_INTERVAL     900   // 正常时段采样间隔: 15分钟(秒)
@@ -168,11 +163,18 @@ void setup() {
     htu21d.begin();
     ze08.begin(Serial2);
     s8.begin(Serial1);
-    delay(200);  // 给传感器预热时间
     
-    // ZE08 需要较长的预热时间（通常3分钟）
-    Serial.println("[INFO] ZE08 sensor needs 3 minutes warmup time");
-    Serial.println("       First readings may be unavailable during warmup");
+    // ZE08 需要预热时间（建议至少 3 分钟，但这里先等待 5 秒让 UART 稳定）
+    Serial.println("[ZE08] Warming up (UART stabilization)...");
+    delay(5000);  // 等待 5 秒让 UART 通信稳定
+    
+    // 清空 UART 缓冲区可能存在的垃圾数据
+    while (Serial2.available()) {
+        Serial2.read();
+    }
+    Serial.println("[ZE08] Warmup complete, UART buffer cleared");
+    
+    delay(200);  // 给其他传感器额外时间
 
     // ===== 第5步：加载持久化数据 =====
     Serial.println("[Step 5] Loading sensor life info...");
@@ -472,9 +474,6 @@ void task_data_process(void *pvParameters) {
 
 // ==================== WiFi通信任务 ====================
 void task_wifi_communicate(void *pvParameters) {
-    int connection_fail_count = 0;
-    const int MAX_FAIL_COUNT = 10;  // 连续失败10次后停止尝试
-    
     while (1) {
         // 等待WiFi连接和数据就绪
         xEventGroupWaitBits(event_group, 
@@ -482,51 +481,31 @@ void task_wifi_communicate(void *pvParameters) {
                            pdTRUE, pdFALSE, portMAX_DELAY);
 
         if (WiFi.status() == WL_CONNECTED) {
-            // 如果连续失败次数过多，降低尝试频率以节能
-            if (connection_fail_count >= MAX_FAIL_COUNT) {
-                Serial.println("[WiFi] Server unreachable, reducing attempt frequency");
-                vTaskDelay(pdMS_TO_TICKS(60000));  // 等待1分钟再试
-                continue;
-            }
-            
             HTTPClient http;
             
             // 构建JSON数据
             String json = build_json_data(current_data);
             
-            // 确定服务器地址
-            String server_addr;
-            #if USE_BROADCAST_DISCOVERY
-                // 使用网关地址作为服务器（常见配置）
-                IPAddress gateway = WiFi.gatewayIP();
-                server_addr = "http://" + gateway.toString() + ":" + String(SERVER_PORT) + "/api/data";
-            #else
-                server_addr = "http://" + String(SERVER_IP) + ":" + String(SERVER_PORT) + "/api/data";
-            #endif
+            // 发送数据到APP
+            String url = "http://" + String(SERVER_IP) + ":" + String(SERVER_PORT) + "/api/data";
             
-            Serial.printf("[WiFi] Attempting to send data to: %s\n", server_addr.c_str());
+            Serial.printf("[WiFi] Sending data to: %s\n", url.c_str());
             
-            http.begin(server_addr);
+            http.begin(url);
             http.addHeader("Content-Type", "application/json");
-            http.setTimeout(5000);  // 设置5秒超时
+            http.setTimeout(5000);  // 设置 5 秒超时
             
             int httpResponseCode = http.POST(json);
             
             if (httpResponseCode > 0) {
                 String response = http.getString();
-                Serial.printf("[WiFi] ✅ Data sent successfully! Response: %d\n", httpResponseCode);
+                Serial.printf("[WiFi] Data sent successfully, response: %d\n", httpResponseCode);
                 Serial.printf("[WiFi] Server response: %s\n", response.c_str());
-                connection_fail_count = 0;  // 重置失败计数
             } else {
-                connection_fail_count++;
-                Serial.printf("[WiFi] ❌ HTTP POST failed: %d (fail count: %d/%d)\n", 
-                             httpResponseCode, connection_fail_count, MAX_FAIL_COUNT);
-                
-                // 提供详细的错误诊断
+                Serial.printf("[ERROR] HTTP POST failed: %d\n", httpResponseCode);
                 if (httpResponseCode == -1) {
                     Serial.println("   → Connection refused or timeout");
-                    Serial.println("   → Check if server is running and accessible");
-                    Serial.println("   → Verify firewall settings");
+                    Serial.printf("   → Check if server is running at %s:%d\n", SERVER_IP, SERVER_PORT);
                 } else if (httpResponseCode == -2) {
                     Serial.println("   → Send header failed");
                 } else if (httpResponseCode == -3) {
@@ -534,17 +513,18 @@ void task_wifi_communicate(void *pvParameters) {
                 } else if (httpResponseCode == -4) {
                     Serial.println("   → Not connected");
                 } else if (httpResponseCode == -5) {
-                    Serial.println("   → Connection lost");
-                } else if (httpResponseCode == -11) {
-                    Serial.println("   → Read timeout");
+                    Serial.println("   → No HTTP server");
+                } else if (httpResponseCode == -6) {
+                    Serial.println("   → Timeout");
                 }
             }
             
             http.end();
+        } else {
+            Serial.println("[WiFi] Not connected, skipping data transmission");
         }
 
-        // 正常情况每5秒尝试一次
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(5000));  // 5秒后再次检查
     }
 }
 
@@ -594,7 +574,21 @@ bool read_htu21d_with_compensation(float &temp, float &hum) {
 
 // ==================== ZE08读取(带温度补偿) ====================
 bool read_ze08_with_compensation(float &hcho) {
+    // 检查 UART 缓冲区是否有数据
+    int available = Serial2.available();
+    
+    // 首次调用时输出调试信息
+    static bool first_call = true;
+    if (first_call) {
+        Serial.printf("[ZE08 Debug] UART2 available bytes: %d\n", available);
+        first_call = false;
+    }
+    
     if (!ze08.update()) {
+        // 如果读取失败，输出更多调试信息
+        if (available == 0) {
+            Serial.println("[ZE08 Debug] No data in UART buffer");
+        }
         return false;
     }
 
