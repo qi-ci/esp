@@ -1,0 +1,55 @@
+name: environmental_monitor
+description: ESP32环境监测仪手机APP - 打开即用,无需登录
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI组件
+  cupertino_icons: ^1.0.2
+  
+  # 网络通信
+  http: ^1.1.0
+  dio: ^5.3.2
+  
+  # 本地存储
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+  shared_preferences: ^2.2.2
+  
+  # GPS定位
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+  
+  # 图表
+  fl_chart: ^0.65.0
+  
+  # 时间处理
+  intl: ^0.18.1
+  timezone: ^0.9.2
+  
+  # 通知
+  flutter_local_notifications: ^16.1.0
+  
+  # 权限
+  permission_handler: ^11.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # 字体
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
