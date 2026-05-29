@@ -44,6 +44,12 @@ const char* WIFI_SSID = "TPGuest_3BD4";
 const char* WIFI_PASSWORD = "yxmy211609";
 const uint16_t SERVER_PORT = 8080;
 
+// 服务器配置（可根据实际情况修改）
+// 选项1: 使用广播地址自动发现（推荐用于开发测试）
+// 选项2: 指定具体的服务器 IP
+#define USE_BROADCAST_DISCOVERY true  // 设置为 false 时使用固定 IP
+const char* SERVER_IP = "192.168.0.100";  // 修改为您的 APP 服务器实际 IP
+
 // ==================== 功耗模式配置 (方案B: 节能模式) ====================
 #define NORMAL_INTERVAL     900   // 正常时段采样间隔: 15分钟(秒)
 #define NIGHT_INTERVAL      3600  // 夜间时段采样间隔: 60分钟(秒)
@@ -118,6 +124,10 @@ void execute_sensor_maintenance();
 // ==================== Arduino Setup ====================
 void setup() {
     Serial.begin(115200);
+    
+    // 等待串口稳定（重要！）
+    delay(1000);
+    
     Serial.println("\n========================================");
     Serial.println("ESP32 Environmental Monitor Starting...");
     Serial.println("Power Mode: B (Energy Saving)");
@@ -127,24 +137,50 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
 
-    // 初始化I2C
-    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    // ===== 第1步：优先初始化 WiFi（给予充足时间）=====
+    Serial.println("[Step 1] Initializing WiFi module...");
+    WiFi.mode(WIFI_MODE_NULL);  // 先设置为 NULL 模式确保干净状态
+    delay(500);
+    WiFi.mode(WIFI_STA);        // 再设置为 STA 模式
+    delay(500);
     
-    // 初始化UART
+    // 检查 WiFi 是否就绪
+    int wifi_status = WiFi.status();
+    Serial.printf("[WiFi] Initial status: %d\n", wifi_status);
+    if (wifi_status == -1) {
+        Serial.println("[WARN] WiFi not ready yet, waiting...");
+        delay(1000);  // 额外等待
+    }
+
+    // ===== 第2步：初始化 I2C 总线 =====
+    Serial.println("[Step 2] Initializing I2C bus...");
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    delay(100);
+
+    // ===== 第3步：初始化 UART 串口 =====
+    Serial.println("[Step 3] Initializing UART ports...");
     Serial1.begin(9600, SERIAL_8N1, UART1_RX_PIN, UART1_TX_PIN);  // S8
     Serial2.begin(9600, SERIAL_8N1, UART2_RX_PIN, UART2_TX_PIN);  // ZE08
-
-    // 初始化传感器
     delay(100);
+
+    // ===== 第4步：初始化传感器 =====
+    Serial.println("[Step 4] Initializing sensors...");
     htu21d.begin();
     ze08.begin(Serial2);
     s8.begin(Serial1);
+    delay(200);  // 给传感器预热时间
+    
+    // ZE08 需要较长的预热时间（通常3分钟）
+    Serial.println("[INFO] ZE08 sensor needs 3 minutes warmup time");
+    Serial.println("       First readings may be unavailable during warmup");
 
-    // 加载传感器寿命信息
+    // ===== 第5步：加载持久化数据 =====
+    Serial.println("[Step 5] Loading sensor life info...");
     prefs.begin("sensor_life", false);
     load_sensor_life_info();
 
-    // 创建RTOS对象
+    // ===== 第6步：创建 RTOS 对象 =====
+    Serial.println("[Step 6] Creating RTOS objects...");
     data_queue = xQueueCreate(5, sizeof(SensorData));
     event_group = xEventGroupCreate();
 
@@ -153,16 +189,18 @@ void setup() {
         ESP.restart();
     }
 
-    // 连接WiFi
+    // ===== 第7步：连接 WiFi（此时 WiFi 模块已充分初始化）=====
+    Serial.println("[Step 7] Connecting to WiFi...");
     setup_wifi();
 
-    // 创建任务
+    // ===== 第8步：创建 FreeRTOS 任务 =====
+    Serial.println("[Step 8] Creating FreeRTOS tasks...");
     xTaskCreate(task_sensor_collect, "SensorCollect", 4096, NULL, 1, NULL);
     xTaskCreate(task_data_process, "DataProcess", 4096, NULL, 2, NULL);
     xTaskCreate(task_wifi_communicate, "WiFiComm", 8192, NULL, 3, NULL);
     xTaskCreate(task_power_manage, "PowerManage", 2048, NULL, 0, NULL);
 
-    Serial.println("System initialized successfully!");
+    Serial.println("\n✅ System initialized successfully!");
     Serial.println("========================================\n");
 }
 
@@ -177,85 +215,132 @@ void setup_wifi() {
     Serial.print("Connecting to WiFi: ");
     Serial.println(WIFI_SSID);
 
-    // 确保 WiFi 模块完全初始化
-    delay(500);
-    WiFi.mode(WIFI_STA);
-    delay(200);
+    // 第一次尝试：正常连接
+    int attempt = 0;
+    const int max_attempts = 3;  // 最多尝试3次完整的连接流程
     
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-    int retry = 0;
-    const int max_retries = 40;  // 增加到40次尝试（20秒）
-    
-    while (WiFi.status() != WL_CONNECTED && retry < max_retries) {
+    while (attempt < max_attempts) {
+        attempt++;
+        Serial.printf("\n[WiFi] Connection attempt %d/%d\n", attempt, max_attempts);
+        
+        // 确保 WiFi 处于正确模式
+        WiFi.mode(WIFI_STA);
+        delay(300);
+        
+        // 断开之前的连接（如果有）
+        WiFi.disconnect(true);
         delay(500);
-        Serial.print(".");
-        retry++;
         
-        // 每5次打印一次状态
-        if (retry % 5 == 0) {
-            int status = WiFi.status();
-            Serial.printf("\n[WiFi] Attempt %d/%d, Status: %d", retry, max_retries, status);
-            
-            // 输出状态含义
-            switch(status) {
-                case 0: Serial.print(" (WL_IDLE_STATUS)"); break;
-                case 1: Serial.print(" (WL_NO_SSID_AVAIL)"); break;
-                case 3: Serial.print(" (WL_CONNECTED)"); break;
-                case 4: Serial.print(" (WL_CONNECT_FAILED)"); break;
-                case 6: Serial.print(" (WL_DISCONNECTED)"); break;
-                case -1: Serial.print(" (WL_NO_SHIELD - WiFi not ready)"); break;
-                default: Serial.print(" (Unknown)"); break;
+        // 开始连接
+        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+        
+        int retry = 0;
+        const int max_retries = 40;  // 每次尝试最多40次（20秒）
+        
+        while (WiFi.status() != WL_CONNECTED && retry < max_retries) {
+            delay(500);
+            if (retry % 10 == 0) {
+                Serial.print(".");
             }
-            Serial.println();
+            retry++;
+            
+            // 每10次打印一次详细状态
+            if (retry % 10 == 0) {
+                int status = WiFi.status();
+                Serial.printf("\n[WiFi] Progress: %d/%d, Status: %d", retry, max_retries, status);
+                
+                // 输出状态含义
+                switch(status) {
+                    case 0: Serial.print(" (WL_IDLE_STATUS)"); break;
+                    case 1: Serial.print(" (WL_NO_SSID_AVAIL)"); break;
+                    case 3: Serial.print(" (WL_CONNECTED ✓)"); break;
+                    case 4: Serial.print(" (WL_CONNECT_FAILED)"); break;
+                    case 6: Serial.print(" (WL_DISCONNECTED)"); break;
+                    case -1: Serial.print(" (WL_NO_SHIELD)"); break;
+                    default: Serial.printf(" (Unknown: %d)", status); break;
+                }
+                Serial.println();
+                
+                // 如果状态是 -1，额外等待让 WiFi 模块就绪
+                if (status == -1) {
+                    Serial.println("[WiFi] Module not ready, waiting...");
+                    delay(2000);
+                }
+            }
+        }
+
+        // 检查是否连接成功
+        if (WiFi.status() == WL_CONNECTED) {
+            Serial.println("\n✅ WiFi connected successfully!");
+            Serial.print("IP address: ");
+            Serial.println(WiFi.localIP());
+            Serial.print("Signal strength (RSSI): ");
+            Serial.print(WiFi.RSSI());
+            Serial.println(" dBm");
+            Serial.print("MAC Address: ");
+            Serial.println(WiFi.macAddress());
+            xEventGroupSetBits(event_group, EVENT_WIFI_CONNECTED);
+            return;  // 成功，退出函数
+        }
+        
+        // 连接失败，记录原因
+        Serial.printf("\n❌ Attempt %d failed. Status: %d\n", attempt, WiFi.status());
+        
+        // 如果还有重试机会，等待后继续
+        if (attempt < max_attempts) {
+            Serial.println("[WiFi] Waiting before retry...");
+            delay(3000);  // 等待3秒再试
         }
     }
 
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n✅ WiFi connected!");
-        Serial.print("IP address: ");
-        Serial.println(WiFi.localIP());
-        Serial.print("Signal strength (RSSI): ");
-        Serial.print(WiFi.RSSI());
-        Serial.println(" dBm");
-        xEventGroupSetBits(event_group, EVENT_WIFI_CONNECTED);
+    // 所有尝试都失败
+    Serial.println("\n❌ WiFi connection failed after all attempts!");
+    Serial.print("Final status code: ");
+    int final_status = WiFi.status();
+    Serial.println(final_status);
+    
+    // 提供详细的诊断信息
+    Serial.println("\n===== Diagnostic Information =====");
+    Serial.print("- MAC Address: ");
+    Serial.println(WiFi.macAddress());
+    Serial.print("- Local IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("- Subnet Mask: ");
+    Serial.println(WiFi.subnetMask());
+    Serial.print("- Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("- DNS Server: ");
+    Serial.println(WiFi.dnsIP());
+    
+    Serial.println("\n===== Failure Analysis =====");
+    if (final_status == -1) {
+        Serial.println("⚠️  CRITICAL: WiFi module not initialized (WL_NO_SHIELD)");
+        Serial.println("   Possible causes:");
+        Serial.println("   1. Insufficient power supply");
+        Serial.println("   2. Hardware fault");
+        Serial.println("   3. Firmware issue");
+        Serial.println("   Solutions:");
+        Serial.println("   → Press RESET button on ESP32");
+        Serial.println("   → Use stable 5V/2A power adapter");
+        Serial.println("   → Check USB cable quality");
+    } else if (final_status == 4) {
+        Serial.println("⚠️  Authentication failed");
+        Serial.println("   → Verify WiFi password is correct");
+    } else if (final_status == 1) {
+        Serial.println("⚠️  SSID not found");
+        Serial.println("   → Check router is powered on");
+        Serial.println("   → Verify SSID name: " + String(WIFI_SSID));
+    } else if (final_status == 6) {
+        Serial.println("⚠️  Connection disconnected");
+        Serial.println("   → Router may have rejected connection");
+        Serial.println("   → Check MAC filtering settings");
     } else {
-        Serial.println("\n❌ WiFi connection failed!");
-        Serial.print("Final status code: ");
-        int final_status = WiFi.status();
-        Serial.println(final_status);
-        
-        // 提供更详细的诊断信息
-        Serial.println("\nDiagnostic Info:");
-        Serial.print("- MAC Address: ");
-        Serial.println(WiFi.macAddress());
-        Serial.print("- Local IP: ");
-        Serial.println(WiFi.localIP());
-        Serial.print("- Subnet Mask: ");
-        Serial.println(WiFi.subnetMask());
-        Serial.print("- Gateway: ");
-        Serial.println(WiFi.gatewayIP());
-        Serial.print("- DNS Server: ");
-        Serial.println(WiFi.dnsIP());
-        
-        Serial.println("\nPossible reasons:");
-        if (final_status == -1) {
-            Serial.println("⚠️  WiFi module not initialized (WL_NO_SHIELD)");
-            Serial.println("   → Try pressing RESET button on ESP32");
-            Serial.println("   → Check power supply stability");
-        } else if (final_status == 4) {
-            Serial.println("⚠️  Authentication failed (wrong password?)");
-        } else if (final_status == 1) {
-            Serial.println("⚠️  SSID not found (check router is on)");
-        } else if (final_status == 6) {
-            Serial.println("⚠️  Disconnected (router rejected or timeout)");
-        } else {
-            Serial.println("1. Wrong password");
-            Serial.println("2. SSID not found");
-            Serial.println("3. Router rejected connection");
-            Serial.println("4. Too many devices connected");
-        }
+        Serial.println("⚠️  Unknown error");
+        Serial.println("   → Try resetting ESP32");
     }
+    
+    Serial.println("\n[WARN] System will continue without WiFi connectivity");
+    Serial.println("       Sensor data will be collected but not transmitted\n");
 }
 
 // ==================== 传感器采集任务 ====================
@@ -387,6 +472,9 @@ void task_data_process(void *pvParameters) {
 
 // ==================== WiFi通信任务 ====================
 void task_wifi_communicate(void *pvParameters) {
+    int connection_fail_count = 0;
+    const int MAX_FAIL_COUNT = 10;  // 连续失败10次后停止尝试
+    
     while (1) {
         // 等待WiFi连接和数据就绪
         xEventGroupWaitBits(event_group, 
@@ -394,30 +482,69 @@ void task_wifi_communicate(void *pvParameters) {
                            pdTRUE, pdFALSE, portMAX_DELAY);
 
         if (WiFi.status() == WL_CONNECTED) {
+            // 如果连续失败次数过多，降低尝试频率以节能
+            if (connection_fail_count >= MAX_FAIL_COUNT) {
+                Serial.println("[WiFi] Server unreachable, reducing attempt frequency");
+                vTaskDelay(pdMS_TO_TICKS(60000));  // 等待1分钟再试
+                continue;
+            }
+            
             HTTPClient http;
             
             // 构建JSON数据
             String json = build_json_data(current_data);
             
-            // 发送数据到APP(假设APP IP为192.168.1.100)
-            String url = "http://192.168.1.100:" + String(SERVER_PORT) + "/api/data";
+            // 确定服务器地址
+            String server_addr;
+            #if USE_BROADCAST_DISCOVERY
+                // 使用网关地址作为服务器（常见配置）
+                IPAddress gateway = WiFi.gatewayIP();
+                server_addr = "http://" + gateway.toString() + ":" + String(SERVER_PORT) + "/api/data";
+            #else
+                server_addr = "http://" + String(SERVER_IP) + ":" + String(SERVER_PORT) + "/api/data";
+            #endif
             
-            http.begin(url);
+            Serial.printf("[WiFi] Attempting to send data to: %s\n", server_addr.c_str());
+            
+            http.begin(server_addr);
             http.addHeader("Content-Type", "application/json");
+            http.setTimeout(5000);  // 设置5秒超时
             
             int httpResponseCode = http.POST(json);
             
             if (httpResponseCode > 0) {
                 String response = http.getString();
-                Serial.printf("[WiFi] Data sent, response: %d\n", httpResponseCode);
+                Serial.printf("[WiFi] ✅ Data sent successfully! Response: %d\n", httpResponseCode);
+                Serial.printf("[WiFi] Server response: %s\n", response.c_str());
+                connection_fail_count = 0;  // 重置失败计数
             } else {
-                Serial.printf("[ERROR] HTTP POST failed: %d\n", httpResponseCode);
+                connection_fail_count++;
+                Serial.printf("[WiFi] ❌ HTTP POST failed: %d (fail count: %d/%d)\n", 
+                             httpResponseCode, connection_fail_count, MAX_FAIL_COUNT);
+                
+                // 提供详细的错误诊断
+                if (httpResponseCode == -1) {
+                    Serial.println("   → Connection refused or timeout");
+                    Serial.println("   → Check if server is running and accessible");
+                    Serial.println("   → Verify firewall settings");
+                } else if (httpResponseCode == -2) {
+                    Serial.println("   → Send header failed");
+                } else if (httpResponseCode == -3) {
+                    Serial.println("   → Send payload failed");
+                } else if (httpResponseCode == -4) {
+                    Serial.println("   → Not connected");
+                } else if (httpResponseCode == -5) {
+                    Serial.println("   → Connection lost");
+                } else if (httpResponseCode == -11) {
+                    Serial.println("   → Read timeout");
+                }
             }
             
             http.end();
         }
 
-        vTaskDelay(pdMS_TO_TICKS(5000));  // 5秒后再次检查
+        // 正常情况每5秒尝试一次
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 

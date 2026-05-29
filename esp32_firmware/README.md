@@ -293,7 +293,7 @@ dmesg | tail -20
 **最小测试代码：**
 如果怀疑代码问题，创建简单测试：
 
-```cpp
+``cpp
 void setup() {
     Serial.begin(115200);
     delay(1000);  // 等待串口稳定
