@@ -40,8 +40,8 @@
 #define LED_PIN         2   // 板载LED
 
 // ==================== WiFi配置 ====================
-const char* WIFI_SSID = "211";
-const char* WIFI_PASSWORD = "yxmy2025";
+const char* WIFI_SSID = "TPGuest_3BD4";
+const char* WIFI_PASSWORD = "yxmy211609";
 const uint16_t SERVER_PORT = 8080;
 
 // ==================== 功耗模式配置 (方案B: 节能模式) ====================
@@ -177,11 +177,15 @@ void setup_wifi() {
     Serial.print("Connecting to WiFi: ");
     Serial.println(WIFI_SSID);
 
+    // 确保 WiFi 模块完全初始化
+    delay(500);
     WiFi.mode(WIFI_STA);
+    delay(200);
+    
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     int retry = 0;
-    const int max_retries = 30;  // 增加到30次尝试（15秒）
+    const int max_retries = 40;  // 增加到40次尝试（20秒）
     
     while (WiFi.status() != WL_CONNECTED && retry < max_retries) {
         delay(500);
@@ -190,7 +194,20 @@ void setup_wifi() {
         
         // 每5次打印一次状态
         if (retry % 5 == 0) {
-            Serial.printf("\n[WiFi] Attempt %d/%d, Status: %d\n", retry, max_retries, WiFi.status());
+            int status = WiFi.status();
+            Serial.printf("\n[WiFi] Attempt %d/%d, Status: %d", retry, max_retries, status);
+            
+            // 输出状态含义
+            switch(status) {
+                case 0: Serial.print(" (WL_IDLE_STATUS)"); break;
+                case 1: Serial.print(" (WL_NO_SSID_AVAIL)"); break;
+                case 3: Serial.print(" (WL_CONNECTED)"); break;
+                case 4: Serial.print(" (WL_CONNECT_FAILED)"); break;
+                case 6: Serial.print(" (WL_DISCONNECTED)"); break;
+                case -1: Serial.print(" (WL_NO_SHIELD - WiFi not ready)"); break;
+                default: Serial.print(" (Unknown)"); break;
+            }
+            Serial.println();
         }
     }
 
@@ -205,18 +222,47 @@ void setup_wifi() {
     } else {
         Serial.println("\n❌ WiFi connection failed!");
         Serial.print("Final status code: ");
-        Serial.println(WiFi.status());
+        int final_status = WiFi.status();
+        Serial.println(final_status);
+        
+        // 提供更详细的诊断信息
+        Serial.println("\nDiagnostic Info:");
+        Serial.print("- MAC Address: ");
+        Serial.println(WiFi.macAddress());
+        Serial.print("- Local IP: ");
+        Serial.println(WiFi.localIP());
+        Serial.print("- Subnet Mask: ");
+        Serial.println(WiFi.subnetMask());
+        Serial.print("- Gateway: ");
+        Serial.println(WiFi.gatewayIP());
+        Serial.print("- DNS Server: ");
+        Serial.println(WiFi.dnsIP());
+        
         Serial.println("\nPossible reasons:");
-        Serial.println("1. Wrong password");
-        Serial.println("2. SSID not found");
-        Serial.println("3. Router rejected connection");
-        Serial.println("4. Too many devices connected");
+        if (final_status == -1) {
+            Serial.println("⚠️  WiFi module not initialized (WL_NO_SHIELD)");
+            Serial.println("   → Try pressing RESET button on ESP32");
+            Serial.println("   → Check power supply stability");
+        } else if (final_status == 4) {
+            Serial.println("⚠️  Authentication failed (wrong password?)");
+        } else if (final_status == 1) {
+            Serial.println("⚠️  SSID not found (check router is on)");
+        } else if (final_status == 6) {
+            Serial.println("⚠️  Disconnected (router rejected or timeout)");
+        } else {
+            Serial.println("1. Wrong password");
+            Serial.println("2. SSID not found");
+            Serial.println("3. Router rejected connection");
+            Serial.println("4. Too many devices connected");
+        }
     }
 }
 
 // ==================== 传感器采集任务 ====================
 void task_sensor_collect(void *pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
+    int ze08_retry_count = 0;
+    const int ZE08_MAX_RETRIES = 5;  // ZE08 最大重试次数
     
     while (1) {
         SensorData data;
@@ -228,18 +274,44 @@ void task_sensor_collect(void *pvParameters) {
         if (!read_htu21d_with_compensation(data.temperature, data.humidity)) {
             Serial.println("[ERROR] HTU21D read failed!");
             success = false;
+        } else {
+            Serial.printf("[OK] Temperature: %.1f°C, Humidity: %.1f%%\n", 
+                         data.temperature, data.humidity);
         }
 
-        // 读取ZE08(带温度补偿)
-        if (!read_ze08_with_compensation(data.formaldehyde)) {
-            Serial.println("[ERROR] ZE08 read failed!");
+        // 读取ZE08(带温度补偿) - 增加重试机制
+        bool ze08_success = false;
+        for (int retry = 0; retry < ZE08_MAX_RETRIES && !ze08_success; retry++) {
+            if (retry > 0) {
+                Serial.printf("[ZE08] Retry %d/%d...\n", retry, ZE08_MAX_RETRIES);
+                delay(100);  // 等待100ms再试
+            }
+            ze08_success = read_ze08_with_compensation(data.formaldehyde);
+        }
+        
+        if (!ze08_success) {
+            Serial.println("[ERROR] ZE08 read failed after retries!");
+            Serial.println("   Possible causes:");
+            Serial.println("   - Sensor not connected (check GPIO 16/17)");
+            Serial.println("   - Sensor needs warmup (wait 3 minutes)");
+            Serial.println("   - UART communication error");
+            data.formaldehyde = 0.0;  // 设置默认值
             success = false;
+        } else {
+            Serial.printf("[OK] Formaldehyde: %.3f ppm\n", data.formaldehyde);
+            ze08_retry_count = 0;  // 重置重试计数
         }
 
         // 读取S8
         if (!read_s8_co2(data.co2)) {
             Serial.println("[ERROR] S8 read failed!");
+            Serial.println("   Possible causes:");
+            Serial.println("   - Sensor not connected (check GPIO 4/5)");
+            Serial.println("   - Sensor needs calibration");
+            data.co2 = 0.0;  // 设置默认值
             success = false;
+        } else {
+            Serial.printf("[OK] CO2: %.0f ppm\n", data.co2);
         }
 
         if (success) {
@@ -253,10 +325,11 @@ void task_sensor_collect(void *pvParameters) {
                 Serial.println("[ERROR] Failed to send data to queue");
             } else {
                 xEventGroupSetBits(event_group, EVENT_DATA_READY);
-                Serial.println("[Sensor] Data collection completed");
+                Serial.println("[Sensor] Data collection completed successfully");
             }
         } else {
             xEventGroupSetBits(event_group, EVENT_SENSOR_ERROR);
+            Serial.println("[WARN] Some sensors failed, continuing with partial data");
         }
 
         // 更新传感器工作时长
