@@ -5886,3 +5886,1183 @@ main.cpp 需要如何调用这些模块。
 ---
 判断哪些文件和代码需要修改，给出每个文件的修改后代码并与之前代码对比，并注释修改说明，按照“--- # 📦 4️⃣ sensors/htu21d_sensor.hcpp id="htu_h" #pragma once void HTU21D_begin(); void HTU21D_read(float* temperature, float* humidity); “格式
 
+很好，现在进入整个架构中最重要的一层：
+
+```text
+④ Core Layer
+```
+
+前面三层已经完成：
+
+```text
+Driver Layer
+↓
+Sensor Layer
+↓
+Processing Layer
+```
+
+但目前还有一个问题：
+
+```cpp
+void loop()
+{
+    HTU21D_read(...);
+    ZE08_read(...);
+    S8_read(...);
+
+    Validator_xxx(...);
+
+    Filter_xxx(...);
+
+    AirQuality_xxx(...);
+
+    Serial.println(...);
+}
+```
+
+本质仍然是：
+
+```text
+脚本式调用
+```
+
+而 Core Layer 要解决的问题是：
+
+```text
+采集逻辑从 main.cpp 移除
+统一由调度器管理
+```
+
+---
+
+# 📁 本阶段涉及文件
+
+新增：
+
+```text
+src/core/
+├── system_state.h
+├── system_state.cpp
+│
+├── sensor_manager.h
+└── sensor_manager.cpp
+```
+
+---
+
+修改：
+
+```text
+src/main.cpp
+```
+
+---
+
+不修改：
+
+```text
+drivers/*
+sensors/*
+processing/*
+```
+
+---
+
+# 📦 1️⃣ core/system_state.h
+
+```cpp id="system_state_h"
+#pragma once
+
+struct SystemState
+{
+    // 传感器数据
+
+    float temperature;
+    float humidity;
+
+    float hcho;
+    int co2;
+
+    // 空气质量
+
+    const char* airQuality;
+
+    // 传感器状态
+
+    bool htuReady;
+    bool ze08Ready;
+    bool s8Ready;
+
+    // 错误计数
+
+    uint32_t errorCount;
+
+    // 启动计数
+
+    uint32_t bootCount;
+};
+
+extern SystemState g_systemState;
+```
+
+---
+
+## 修改说明
+
+新增：
+
+```text
+统一状态中心
+```
+
+以后：
+
+```text
+全局数据只保存一份
+```
+
+---
+
+# 📦 2️⃣ core/system_state.cpp
+
+```cpp id="system_state_cpp"
+#include "system_state.h"
+
+SystemState g_systemState =
+{
+    .temperature = NAN,
+    .humidity = NAN,
+
+    .hcho = NAN,
+    .co2 = -1,
+
+    .airQuality = "未知",
+
+    .htuReady = false,
+    .ze08Ready = false,
+    .s8Ready = false,
+
+    .errorCount = 0,
+
+    .bootCount = 1
+};
+```
+
+---
+
+## 修改说明
+
+创建：
+
+```text
+系统唯一状态实例
+```
+
+以后所有模块共享：
+
+```cpp
+g_systemState
+```
+
+---
+
+# 📦 3️⃣ core/sensor_manager.h
+
+```cpp id="sensor_manager_h"
+#pragma once
+
+void SensorManager_begin();
+
+void SensorManager_update();
+```
+
+---
+
+## 修改说明
+
+提供：
+
+```text
+统一入口
+```
+
+---
+
+# 📦 4️⃣ core/sensor_manager.cpp
+
+```cpp id="sensor_manager_cpp"
+#include <Arduino.h>
+
+#include "sensor_manager.h"
+#include "system_state.h"
+
+#include "../sensors/htu21d_sensor.h"
+#include "../sensors/ze08_sensor.h"
+#include "../sensors/s8_sensor.h"
+
+#include "../processing/filter.h"
+#include "../processing/data_validator.h"
+#include "../processing/air_quality.h"
+
+// EMA状态
+
+static float tempFilterState = NAN;
+static float humFilterState = NAN;
+static float hchoFilterState = NAN;
+static float co2FilterState = NAN;
+
+// 定时器
+
+static uint32_t lastSampleTime = 0;
+
+static const uint32_t SAMPLE_INTERVAL = 5000;
+
+// ============================
+
+void SensorManager_begin()
+{
+    HTU21D_begin();
+    ZE08_begin();
+    S8_begin();
+
+    g_systemState.htuReady =
+        HTU21D_isReady();
+
+    g_systemState.ze08Ready =
+        ZE08_isReady();
+
+    g_systemState.s8Ready =
+        S8_isReady();
+}
+
+// ============================
+
+void SensorManager_update()
+{
+    if(millis() - lastSampleTime
+        < SAMPLE_INTERVAL)
+    {
+        return;
+    }
+
+    lastSampleTime = millis();
+
+    float temp;
+    float hum;
+
+    float hcho;
+
+    int co2;
+
+    // HTU21D
+
+    if(HTU21D_read(&temp,&hum))
+    {
+        if(Validator_temperature(temp))
+        {
+            g_systemState.temperature =
+                Filter_applyEMA(
+                    temp,
+                    &tempFilterState,
+                    0.3f);
+        }
+
+        if(Validator_humidity(hum))
+        {
+            g_systemState.humidity =
+                Filter_applyEMA(
+                    hum,
+                    &humFilterState,
+                    0.3f);
+        }
+    }
+
+    // ZE08
+
+    if(ZE08_read(&hcho))
+    {
+        if(Validator_hcho(hcho))
+        {
+            g_systemState.hcho =
+                Filter_applyEMA(
+                    hcho,
+                    &hchoFilterState,
+                    0.2f);
+        }
+    }
+
+    // S8
+
+    if(S8_read(&co2))
+    {
+        if(Validator_co2(co2))
+        {
+            g_systemState.co2 =
+                (int)Filter_applyEMA(
+                    (float)co2,
+                    &co2FilterState,
+                    0.2f);
+        }
+    }
+
+    g_systemState.airQuality =
+        AirQuality_getLevel(
+            g_systemState.co2,
+            g_systemState.hcho);
+}
+```
+
+---
+
+## 修改说明
+
+新增：
+
+### 统一调度
+
+```text
+HTU21D
+ZE08
+S8
+```
+
+全部由：
+
+```cpp
+SensorManager_update()
+```
+
+管理
+
+---
+
+### 统一采样周期
+
+```cpp
+SAMPLE_INTERVAL = 5000
+```
+
+以后修改采样频率：
+
+```cpp
+只改一处
+```
+
+---
+
+### Processing层接入
+
+```text
+Validator
+Filter
+AirQuality
+```
+
+全部从 main.cpp 移除
+
+---
+
+# 📦 5️⃣ main.cpp
+
+---
+
+## 修改前
+
+```cpp
+void loop()
+{
+    读传感器
+
+    校验
+
+    滤波
+
+    空气质量
+
+    输出
+}
+```
+
+---
+
+## 修改后
+
+```cpp id="main_new_core"
+#include <Arduino.h>
+
+#include "drivers/i2c_manager.h"
+
+#include "core/system_state.h"
+#include "core/sensor_manager.h"
+
+void setup()
+{
+    Serial.begin(115200);
+
+    I2CManager_begin();
+
+    SensorManager_begin();
+}
+
+void loop()
+{
+    SensorManager_update();
+
+    Serial.println();
+
+    Serial.println(
+        "====================");
+
+    Serial.printf(
+        "Temperature : %.2f C\n",
+        g_systemState.temperature);
+
+    Serial.printf(
+        "Humidity    : %.2f %%\n",
+        g_systemState.humidity);
+
+    Serial.printf(
+        "CO2         : %d ppm\n",
+        g_systemState.co2);
+
+    Serial.printf(
+        "HCHO        : %.3f mg/m3\n",
+        g_systemState.hcho);
+
+    Serial.printf(
+        "Air Quality : %s\n",
+        g_systemState.airQuality);
+
+    Serial.println(
+        "====================");
+
+    delay(1000);
+}
+```
+
+---
+
+# 修改说明
+
+## 之前
+
+```text
+main.cpp
+├── 采集
+├── 校验
+├── 滤波
+├── 评分
+└── 输出
+```
+
+---
+
+## 现在
+
+```text
+main.cpp
+├── 初始化
+└── 显示
+```
+
+---
+
+# Core Layer 完成后架构
+
+```text
+main.cpp
+    │
+    ▼
+sensor_manager
+    │
+    ├── HTU21D
+    ├── ZE08
+    ├── S8
+    │
+    ▼
+validator
+    ▼
+filter
+    ▼
+air_quality
+    │
+    ▼
+system_state
+    │
+    ▼
+main.cpp显示
+```
+
+---
+
+# 本阶段获得能力
+
+## sensor_manager
+
+```text
+✓ 统一调度
+✓ 统一采样频率
+✓ 统一处理流程
+✓ main脱离业务逻辑
+```
+
+---
+
+## system_state
+
+```text
+✓ 全局状态中心
+✓ 传感器状态
+✓ 空气质量状态
+✓ 错误统计入口
+✓ 长期运行基础
+```
+
+---
+
+到这里，你最初的单文件程序实际上已经完成了你记忆中的四层架构：
+
+```text
+Driver Layer
+├── i2c_manager
+└── uart_manager
+
+Sensor Layer
+├── htu21d_sensor
+├── ze08_sensor
+├── s8_sensor
+├── ze08_protocol
+└── s8_protocol
+
+Processing Layer
+├── filter
+├── data_validator
+└── air_quality
+
+Core Layer
+├── sensor_manager
+└── system_state
+```
+
+下一步如果继续优化，通常会进入你原规划里的：
+
+```text
+app/
+├── output_formatter
+└── serial_reporter
+```
+
+把串口输出格式也从 `main.cpp` 中彻底移出去，实现真正的应用层。
+
+# core/system_state.h文件中的uint32_t显示'uint32_t' does not name a type; did you mean 'char32_t'?core/system_state.cpp文件中的NAN显示'NAN' was not declared in this scope
+
+这是一个典型的 **C++头文件依赖问题**，不是架构问题。
+
+你看到的两个错误：
+
+```cpp
+'uint32_t' does not name a type
+```
+
+和
+
+```cpp
+'NAN' was not declared in this scope
+```
+
+说明我给出的示例代码缺少必要头文件。
+
+---
+
+# ① system_state.h 中 uint32_t 报错
+
+当前代码：
+
+```cpp
+#pragma once
+
+struct SystemState
+{
+    ...
+    uint32_t errorCount;
+    uint32_t bootCount;
+};
+```
+
+编译器不知道：
+
+```cpp
+uint32_t
+```
+
+是什么。
+
+---
+
+## 修复方法
+
+在文件顶部增加：
+
+```cpp
+#include <stdint.h>
+```
+
+---
+
+# 📦 core/system_state.h
+
+修改后：
+
+```cpp
+#pragma once
+
+#include <stdint.h>
+
+struct SystemState
+{
+    // 传感器数据
+
+    float temperature;
+    float humidity;
+
+    float hcho;
+    int co2;
+
+    // 空气质量
+
+    const char* airQuality;
+
+    // 传感器状态
+
+    bool htuReady;
+    bool ze08Ready;
+    bool s8Ready;
+
+    // 错误计数
+
+    uint32_t errorCount;
+
+    // 启动计数
+
+    uint32_t bootCount;
+};
+
+extern SystemState g_systemState;
+```
+
+---
+
+# ② system_state.cpp 中 NAN 报错
+
+当前代码：
+
+```cpp
+.temperature = NAN,
+.humidity = NAN,
+
+.hcho = NAN,
+```
+
+编译器不知道：
+
+```cpp
+NAN
+```
+
+是什么。
+
+---
+
+## 原因
+
+NAN 定义在：
+
+```cpp
+<math.h>
+```
+
+或
+
+```cpp
+<cmath>
+```
+
+中。
+
+---
+
+## 修复方法
+
+文件顶部增加：
+
+```cpp
+#include <math.h>
+```
+
+---
+
+# 📦 core/system_state.cpp
+
+修改后：
+
+```cpp
+#include <math.h>
+
+#include "system_state.h"
+
+SystemState g_systemState =
+{
+    .temperature = NAN,
+    .humidity = NAN,
+
+    .hcho = NAN,
+    .co2 = -1,
+
+    .airQuality = "未知",
+
+    .htuReady = false,
+    .ze08Ready = false,
+    .s8Ready = false,
+
+    .errorCount = 0,
+
+    .bootCount = 1
+};
+```
+
+---
+
+# ESP32 更推荐的写法
+
+实际上在 Arduino/ESP32 项目里，我更推荐：
+
+```cpp
+#include <Arduino.h>
+```
+
+因为 Arduino 已经包含：
+
+```cpp
+uint32_t
+NAN
+millis()
+Serial
+```
+
+等定义。
+
+因此也可以写成：
+
+---
+
+# 📦 core/system_state.h（ESP32推荐）
+
+```cpp
+#pragma once
+
+#include <Arduino.h>
+
+struct SystemState
+{
+    ...
+};
+```
+
+---
+
+# 📦 core/system_state.cpp（ESP32推荐）
+
+```cpp
+#include <Arduino.h>
+
+#include "system_state.h"
+
+SystemState g_systemState =
+{
+    ...
+};
+```
+
+---
+
+# 后面几个文件也要检查
+
+按照我前面给出的 Core Layer 示例，如果你直接复制代码，以下文件大概率也会报类似错误：
+
+### sensor_manager.cpp
+
+需要：
+
+```cpp
+#include <Arduino.h>
+```
+
+因为使用了：
+
+```cpp
+millis()
+NAN
+uint32_t
+```
+
+---
+
+### filter.cpp
+
+如果使用：
+
+```cpp
+NAN
+```
+
+或者：
+
+```cpp
+isnan()
+```
+
+需要：
+
+```cpp
+#include <math.h>
+```
+
+或者：
+
+```cpp
+#include <Arduino.h>
+```
+
+---
+
+### data_validator.cpp
+
+因为使用：
+
+```cpp
+isnan()
+```
+
+建议：
+
+```cpp
+#include <math.h>
+```
+
+---
+
+# 最适合当前 PlatformIO + ESP32 项目的做法
+
+为了避免以后不断出现：
+
+```text
+uint32_t 未定义
+NAN 未定义
+millis 未定义
+isnan 未定义
+```
+
+建议统一规则：
+
+### 所有 `.cpp`
+
+```cpp
+#include <Arduino.h>
+```
+
+---
+
+### 所有 `.h`
+
+如果用到：
+
+```cpp
+uint32_t
+size_t
+bool
+```
+
+也直接：
+
+```cpp
+#include <Arduino.h>
+```
+
+这样最符合 ESP32 Arduino Framework 的实际工程习惯。
+
+# 那void SensorManager_begin()
+{
+    I2CManager_begin(21,22);
+    UARTManager_beginUART1(9600, 4, 5);
+    UARTManager_beginUART2(9600, 16, 17);
+    HTU21D_begin();
+    ZE08_begin();
+    S8_begin();
+
+    g_systemState.htuReady =
+        HTU21D_isReady();
+
+    g_systemState.ze08Ready =
+        ZE08_isReady();
+
+    g_systemState.s8Ready =
+        S8_isReady();
+}是最正确的吗
+
+这个写法——**已经非常接近“工程上更合理的标准答案”了**，但我不想简单说“最正确”，因为这里有一个更关键的层级问题。
+
+---
+
+# 🧠 先给结论
+
+```text id="ans_final"
+这是“SensorManager承担系统初始化职责”的正确写法之一，
+但它是否“最正确”，取决于你是否接受：
+SensorManager = 系统编排层（System Orchestrator）
+```
+
+---
+
+# ✅ 你的当前写法在做什么
+
+```cpp id="sm1"
+void SensorManager_begin()
+{
+    I2CManager_begin(21,22);
+    UARTManager_beginUART1(9600, 4, 5);
+    UARTManager_beginUART2(9600, 16, 17);
+
+    HTU21D_begin();
+    ZE08_begin();
+    S8_begin();
+
+    g_systemState.htuReady = HTU21D_isReady();
+    g_systemState.ze08Ready = ZE08_isReady();
+    g_systemState.s8Ready = S8_isReady();
+}
+```
+
+---
+
+## 📌 它实际上做了 3 件事：
+
+```text id="role1"
+① 初始化硬件总线（I2C / UART）
+② 初始化传感器设备
+③ 收集设备状态写入 system_state
+```
+
+---
+
+# 🧠 关键问题来了：职责是否“合理”？
+
+我们拆层看：
+
+---
+
+# 🧱 ① Driver层职责
+
+```text id="driver"
+I2CManager / UARTManager
+→ 只负责“提供通信能力”
+```
+
+✔ 没问题
+
+---
+
+# 🧱 ② Sensor层职责
+
+```text id="sensor"
+HTU21D / ZE08 / S8
+→ 只负责“设备协议 + 数据解析”
+```
+
+✔ 没问题
+
+---
+
+# 🧱 ③ Core层（你现在这里）
+
+```text id="core"
+SensorManager
+→ 负责“系统编排”
+```
+
+👉 重点来了
+
+---
+
+# 🧠 你的 SensorManager 已经是什么角色？
+
+其实已经是：
+
+```text id="orchestrator"
+✔ 系统启动器
+✔ 资源初始化器
+✔ 设备管理器
+✔ 状态同步器
+```
+
+👉 这已经不是“Manager”，而是：
+
+# 👉 System Orchestrator（系统编排器）
+
+---
+
+# 🚨 所以问题不是“对不对”，而是“层级定义变了”
+
+---
+
+## ✔ 如果你定义 SensorManager 是：
+
+```text id="def1"
+只负责“调度采集”
+```
+
+👉 那现在写法 ❌ 偏重了（因为它还在 init driver）
+
+---
+
+## ✔ 如果你定义 SensorManager 是：
+
+```text id="def2"
+负责“整个采集系统生命周期”
+```
+
+👉 那现在写法 ✔ 完全正确
+
+---
+
+# 🧠 工业级真实情况（很重要）
+
+在真实 IoT 产品中：
+
+## ✔ 常见做法就是你现在这种
+
+```text id="real"
+SensorManager = system bootstrap + scheduler
+```
+
+因为：
+
+* ESP32没有复杂启动层
+* 不引入 RTOS 时必须有“统一入口”
+* 便于控制初始化顺序
+
+---
+
+# 📊 两种架构风格对比
+
+---
+
+## 🥇 风格A（你现在）
+
+```text id="styleA"
+main()
+ └── SensorManager_begin()
+        ├── init bus
+        ├── init sensors
+        ├── check status
+```
+
+✔ 简单
+✔ 稳定
+✔ 工程常见
+
+---
+
+## 🥈 风格B（更“纯分层”）
+
+```text id="styleB"
+main()
+ ├── BusManager_begin()
+ ├── SensorManager_begin()
+ ├── DeviceManager_begin()
+```
+
+✔ 更严格分层
+❌ 更复杂
+❌ ESP32意义不大
+
+---
+
+# 🧠 关键评价（很重要）
+
+你的这段代码：
+
+```cpp id="eval"
+SensorManager_begin()
+```
+
+### ✔ 优点
+
+* 初始化完全集中
+* 不会遗漏设备
+* 顺序可控
+* 非常适合长期运行设备
+
+---
+
+### ⚠ 唯一“潜在问题”
+
+```text id="risk"
+SensorManager 变得“太大”
+```
+
+如果以后你加：
+
+* MQTT
+* OTA
+* WiFi
+* SD卡
+
+👉 这里会变成“上帝函数”
+
+---
+
+# 🧠 工业级建议（进阶一点）
+
+未来可以拆成：
+
+```text id="future"
+SystemManager_begin()
+ ├── Bus init
+ ├── SensorManager_begin()
+ ├── NetworkManager_begin()
+```
+
+---
+
+# 🧠 一句话总结
+
+```text id="final"
+你这个 SensorManager_begin 写法在 ESP32 IoT 项目中是“合理且常见的工程实践”，
+它属于“系统编排层”，而不是传统意义的纯传感器管理层。
+```
+
+---
+
+# 🚀 如果你下一步想继续优化（很关键）
+
+你现在已经到一个很高级的位置了，下一步可以做：
+
+## 👉 SensorManager升级成“调度器”
+
+包括：
+
+* 每个传感器独立采样周期
+* 非阻塞读取（避免 delay）
+* 失败自动重试
+* 状态机化管理
+
+这个会让你的项目从：
+
+```text
+工程代码 → 设备级系统
+```
+
+升级一层。
+
+

@@ -117,7 +117,7 @@ static bool g_ready = false;
 
 bool S8_begin()
 {
-    UARTManager_beginUART1(9600,4,5);
+    // UARTManager_beginUART1(9600,4,5);
 
     g_ready = true;
 

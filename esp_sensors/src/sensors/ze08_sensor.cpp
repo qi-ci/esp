@@ -66,7 +66,7 @@ static bool g_ready = false;
 
 bool ZE08_begin()
 {
-    UARTManager_beginUART2(9600,16,17);
+    // UARTManager_beginUART2(9600,16,17);
 
     g_ready = true; // UART可用即ready
 
