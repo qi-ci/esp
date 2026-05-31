@@ -4074,3 +4074,708 @@ Sensor Layer V3（协议解耦完成）
 ```text id="final_goal"
 多协议统一IoT驱动架构（工业级）
 ```
+
+# S8 也做“协议层抽象”，判断哪些文件和代码需要修改，给出每个文件的修改后代码并与之前代码对比，并注释修改说明，按照“--- # 📦 4️⃣ sensors/htu21d_sensor.hcpp id="htu_h" #pragma once void HTU21D_begin(); void HTU21D_read(float* temperature, float* humidity); “格式
+
+很好，这一步你已经进入：
+
+```text id="s8_proto"
+多协议统一架构（Protocol Layer 扩展到 Modbus）
+```
+
+S8 和 ZE08 的本质区别是：
+
+| 设备     | 协议类型       |
+| ------ | ---------- |
+| ZE08   | 自定义帧协议     |
+| S8     | Modbus RTU |
+| HTU21D | I2C寄存器协议   |
+
+👉 所以 S8 必须做“协议层抽象”，否则 Driver 和 Sensor 会继续耦合。
+
+---
+
+# 🧠 本轮目标
+
+新增：
+
+```text id="s8_protocol"
+S8 Protocol Layer（Modbus抽象）
+```
+
+作用：
+
+```text id="goal"
+✔ CRC16 独立
+✔ 请求帧构造独立
+✔ 响应解析独立
+✔ Sensor层只负责调用
+```
+
+---
+
+# 📁 本轮文件变化
+
+## 新增：
+
+```text id="new"
+src/sensors/s8_protocol.h
+src/sensors/s8_protocol.cpp
+```
+
+---
+
+## 修改：
+
+```text id="modify"
+src/sensors/s8_sensor.cpp
+```
+
+---
+
+## 不变：
+
+```text id="keep"
+s8_sensor.h
+ze08/*
+htu21d/*
+drivers/*
+```
+
+---
+
+# 📦 1️⃣ sensors/s8_protocol.h（新增）
+
+```cpp id="s8_proto_h"
+#pragma once
+#include <stdint.h>
+
+// S8解析结果
+struct S8Frame
+{
+    int co2;
+    bool valid;
+};
+
+// 构造请求帧
+void S8_buildRequest(uint8_t* cmd);
+
+// CRC16
+uint16_t S8_crc16(const uint8_t* data, uint8_t len);
+
+// 解析响应帧
+bool S8_parseFrame(
+    const uint8_t* buf,
+    S8Frame* out);
+```
+
+---
+
+## 修改说明
+
+新增：
+
+```text id="s8_struct"
+✔ S8Frame统一结果
+✔ 请求/解析分离
+✔ CRC独立
+```
+
+---
+
+# 📦 2️⃣ sensors/s8_protocol.cpp（新增）
+
+```cpp id="s8_proto_cpp"
+#include "s8_protocol.h"
+
+// ================= CRC16 Modbus =================
+
+uint16_t S8_crc16(
+    const uint8_t* buf,
+    uint8_t len)
+{
+    uint16_t crc = 0xFFFF;
+
+    for(uint8_t i = 0; i < len; i++)
+    {
+        crc ^= buf[i];
+
+        for(int j = 0; j < 8; j++)
+        {
+            if(crc & 1)
+            {
+                crc >>= 1;
+                crc ^= 0xA001;
+            }
+            else
+            {
+                crc >>= 1;
+            }
+        }
+    }
+
+    return crc;
+}
+
+// ================= 请求帧 =================
+
+void S8_buildRequest(uint8_t* cmd)
+{
+    cmd[0] = 0xFE;
+    cmd[1] = 0x04;
+    cmd[2] = 0x00;
+    cmd[3] = 0x03;
+    cmd[4] = 0x00;
+    cmd[5] = 0x01;
+
+    uint16_t crc =
+        S8_crc16(cmd, 6);
+
+    cmd[6] = crc & 0xFF;
+    cmd[7] = crc >> 8;
+}
+
+// ================= 响应解析 =================
+
+bool S8_parseFrame(
+    const uint8_t* buf,
+    S8Frame* out)
+{
+    uint16_t value =
+        ((uint16_t)buf[3] << 8)
+        | buf[4];
+
+    out->co2 = value;
+
+    out->valid = true;
+
+    return true;
+}
+```
+
+---
+
+## 修改说明
+
+### ✔ CRC16 独立
+
+```text id="crc"
+S8_crc16()
+```
+
+---
+
+### ✔ 请求帧独立
+
+```text id="req"
+S8_buildRequest()
+```
+
+---
+
+### ✔ 解析独立
+
+```text id="parse"
+S8_parseFrame()
+```
+
+---
+
+# 📦 3️⃣ sensors/s8_sensor.h（无变化）
+
+```cpp id="s8_h"
+#pragma once
+
+bool S8_begin();
+
+bool S8_read(int* co2ppm);
+
+bool S8_isReady();
+```
+
+---
+
+# 📦 4️⃣ sensors/s8_sensor.cpp（核心修改）
+
+---
+
+## 修改前（关键部分）
+
+```cpp id="old_s8"
+uint8_t cmd[8] = {...};
+
+uint16_t crc = modbusCRC(cmd,6);
+
+serial.write(cmd,8);
+
+UARTManager_readFrame(...);
+
+*co2ppm = ...
+```
+
+---
+
+## 修改后
+
+```cpp id="new_s8"
+#include "drivers/uart_manager.h"
+#include "s8_protocol.h"
+
+static bool g_ready = false;
+
+bool S8_begin()
+{
+    UARTManager_beginUART1(9600,4,5);
+
+    g_ready = true;
+
+    return true;
+}
+
+bool S8_isReady()
+{
+    return g_ready;
+}
+
+bool S8_read(int* co2ppm)
+{
+    if(!g_ready)
+    {
+        return false;
+    }
+
+    HardwareSerial& serial =
+        UARTManager_getUART1();
+
+    uint8_t cmd[8];
+
+    S8_buildRequest(cmd);
+
+    UARTManager_clearBuffer(serial);
+
+    serial.write(cmd,8);
+
+    uint8_t buf[7];
+
+    if(!UARTManager_readFrame(
+        serial,
+        buf,
+        7,
+        200))
+    {
+        return false;
+    }
+
+    S8Frame frame;
+
+    if(!S8_parseFrame(buf,&frame))
+    {
+        return false;
+    }
+
+    *co2ppm = frame.co2;
+
+    return frame.valid;
+}
+```
+
+---
+
+## 修改说明
+
+### ❌ 删除
+
+```text id="remove_s8"
+CRC逻辑
+帧构造逻辑
+解析逻辑
+```
+
+---
+
+### ✔ 新增
+
+```text id="add_s8"
+S8_buildRequest()
+S8_parseFrame()
+S8_crc16()
+```
+
+---
+
+### ✔ Sensor职责变化
+
+```text id="role"
+只负责：
+- 调用Driver
+- 调用Protocol
+- 返回结果
+```
+
+---
+
+# 🧠 架构变化（关键）
+
+## S8 V1
+
+```text id="v1"
+Sensor
+ ├── CRC16
+ ├── 请求帧
+ ├── UART
+ ├── 解析
+ └── 输出
+```
+
+---
+
+## S8 V2（现在）
+
+```text id="v2"
+Sensor
+ ├── Driver（UART）
+ └── Protocol（S8协议）
+
+Protocol
+ ├── CRC16
+ ├── 请求帧
+ ├── 解析
+ └── 数据结构
+```
+
+---
+
+# 🚨 这一步的本质变化
+
+```text id="shift"
+从“设备驱动”
+→ “协议驱动 + 数据层分离”
+```
+
+---
+
+# 🧠 当前你系统已经到达：
+
+```text id="final_state"
+✔ Driver Layer（稳定通信）
+✔ Sensor Layer（可靠采集）
+✔ Protocol Layer（协议解耦）
+```
+
+---
+
+# 🚀 下一步（非常关键）
+
+你现在已经具备工业级基础架构了。
+
+下一步真正让系统“像产品”的是：
+
+## 👉 Processing Layer（数据变智能）
+
+我们可以继续做：
+
+* filter（EMA / 滑动平均）
+* data_validator（异常值剔除）
+* air_quality（空气评分系统）
+
+---
+
+如果你下一步说：
+
+> 👉 “开始Processing Layer优化”
+
+我会把你的系统从：
+
+```text id="device"
+采集设备
+```
+
+升级成：
+
+```text id="product"
+空气质量分析系统（可用于产品）
+```
+# ZE08协议适配层文件中，实际使用的ZE08元件的校验方式是求和校验，指取发送接收协议的1234567的和取反+1，是否可以使用现在分出的校验层
+
+可以，而且**这正是协议层存在的意义**。
+
+如果你的 ZE08-CH2O 模块使用的是说明书中的校验规则：
+
+```text
+Checksum =
+( Byte1 + Byte2 + Byte3 + Byte4
++ Byte5 + Byte6 + Byte7 )
+
+取低8位后取反加1
+```
+
+也就是：
+
+```text
+Checksum = (~sum) + 1
+```
+
+那么这种规则应该放在：
+
+```text
+ze08_protocol.cpp
+```
+
+而不是：
+
+```text
+ze08_sensor.cpp
+```
+
+---
+
+# 你的当前协议层是否支持？
+
+看我之前给出的代码：
+
+```cpp
+static uint8_t ZE08_checksum(
+    const uint8_t* data)
+{
+    uint8_t sum = 0;
+
+    for(int i = 0; i < 8; i++)
+    {
+        sum += data[i];
+    }
+
+    return (uint8_t)(~sum + 1);
+}
+```
+
+这里实际上计算的是：
+
+```text
+Byte0~Byte7
+```
+
+即：
+
+```text
+FF + 17 + ...
+```
+
+---
+
+# 但 ZE08 说明书要求的是？
+
+以你之前抓到的数据为例：
+
+```text
+FF 17 04 00 00 2D 13 88 1D
+```
+
+说明书规定：
+
+```text
+校验和 =
+17 + 04 + 00 + 00 + 2D + 13 + 88
+```
+
+注意：
+
+```text
+不包含 FF
+不包含最后校验字节
+```
+
+即：
+
+```text
+Byte1~Byte7
+```
+
+然后：
+
+```text
+(~sum)+1
+```
+
+结果应该等于：
+
+```text
+Byte8
+```
+
+---
+
+# 所以之前协议层有一个隐藏Bug
+
+之前代码：
+
+```cpp
+for(int i=0;i<8;i++)
+{
+    sum += data[i];
+}
+```
+
+实际计算：
+
+```text
+Byte0~Byte7
+```
+
+而说明书要求：
+
+```text
+Byte1~Byte7
+```
+
+因此可能出现：
+
+```text
+所有合法数据
+↓
+CRC不通过
+↓
+返回false
+↓
+HCHO变成0
+```
+
+这和你前面遇到的现象完全一致。
+
+---
+
+# 正确写法
+
+建议改成：
+
+```cpp
+static uint8_t ZE08_checksum(
+    const uint8_t* data)
+{
+    uint8_t sum = 0;
+
+    // 只计算 Byte1~Byte7
+    for(int i = 1; i <= 7; i++)
+    {
+        sum += data[i];
+    }
+
+    return (uint8_t)(~sum + 1);
+}
+```
+
+然后：
+
+```cpp
+uint8_t checksum =
+    ZE08_checksum(buf);
+
+if(checksum != buf[8])
+{
+    return false;
+}
+```
+
+---
+
+# 为什么协议层特别适合放这里？
+
+假设以后你买到另一批 ZE08：
+
+厂商A：
+
+```text
+Byte1~Byte7求和校验
+```
+
+厂商B：
+
+```text
+Byte0~Byte7求和校验
+```
+
+厂商C：
+
+```text
+不校验
+```
+
+那么你只需要修改：
+
+```cpp
+ze08_protocol.cpp
+```
+
+中的：
+
+```cpp
+ZE08_checksum()
+```
+
+而：
+
+```cpp
+ze08_sensor.cpp
+```
+
+完全不用动。
+
+---
+
+# 结合你当前项目，我建议的最终结构
+
+```text
+sensors/
+├── ze08_sensor.cpp
+│
+├── ze08_protocol.cpp
+│   ├── ZE08_checksum()
+│   ├── ZE08_findFrame()
+│   ├── ZE08_parseFrame()
+│   └── ZE08_verifyChecksum()
+```
+
+其中：
+
+```text
+Sensor层
+负责：
+    UART读取
+
+Protocol层
+负责：
+    帧同步
+    校验
+    数据解析
+```
+
+这与你前面建立的：
+
+```text
+Driver
+↓
+Sensor
+↓
+Protocol
+```
+
+架构是完全匹配的。
+
+对于你现在实际使用的 Winsen ZE08-CH2O，根据你贴出的数据帧：
+
+```text
+FF 17 04 00 00 2D 13 88 1D
+```
+
+我建议把协议层改成：
+
+```text
+Byte1~Byte7求和校验
+```
+
+这是与官方协议文档一致的实现。这样最有可能解决你之前出现的：
+
+```text
+甲醛 : 0.000 mg/m³
+```
+
+问题。

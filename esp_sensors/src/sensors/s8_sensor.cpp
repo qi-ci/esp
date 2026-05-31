@@ -111,6 +111,7 @@
 // }
 
 #include "drivers/uart_manager.h"
+#include "s8_protocol.h"
 
 static bool g_ready = false;
 
@@ -128,31 +129,31 @@ bool S8_isReady()
     return g_ready;
 }
 
-// ================= CRC16 =================
-static uint16_t modbusCRC(uint8_t *buf, uint8_t len)
-{
-    uint16_t crc = 0xFFFF;
+// // ================= CRC16 =================
+// static uint16_t modbusCRC(uint8_t *buf, uint8_t len)
+// {
+//     uint16_t crc = 0xFFFF;
 
-    for(uint8_t i = 0; i < len; i++)
-    {
-        crc ^= buf[i];
+//     for(uint8_t i = 0; i < len; i++)
+//     {
+//         crc ^= buf[i];
 
-        for(int j = 0; j < 8; j++)
-        {
-            if(crc & 1)
-            {
-                crc >>= 1;
-                crc ^= 0xA001;
-            }
-            else
-            {
-                crc >>= 1;
-            }
-        }
-    }
+//         for(int j = 0; j < 8; j++)
+//         {
+//             if(crc & 1)
+//             {
+//                 crc >>= 1;
+//                 crc ^= 0xA001;
+//             }
+//             else
+//             {
+//                 crc >>= 1;
+//             }
+//         }
+//     }
 
-    return crc;
-}
+//     return crc;
+// }
 
 bool S8_read(int* co2ppm)
 {
@@ -164,17 +165,20 @@ bool S8_read(int* co2ppm)
     HardwareSerial& serial =
         UARTManager_getUART1();
 
-    uint8_t cmd[8] =
-    {
-        0xFE,0x04,0x00,0x03,
-        0x00,0x01,0x00,0x00
-    };
+    // uint8_t cmd[8] =
+    // {
+    //     0xFE,0x04,0x00,0x03,
+    //     0x00,0x01,0x00,0x00
+    // };
 
-    uint16_t crc =
-        modbusCRC(cmd,6);
+    // uint16_t crc =
+    //     modbusCRC(cmd,6);
 
-    cmd[6] = crc & 0xFF;
-    cmd[7] = crc >> 8;
+    // cmd[6] = crc & 0xFF;
+    // cmd[7] = crc >> 8;
+    uint8_t cmd[8];
+
+    S8_buildRequest(cmd);
 
     UARTManager_clearBuffer(serial);
 
@@ -191,9 +195,20 @@ bool S8_read(int* co2ppm)
         return false;
     }
 
-    *co2ppm =
-        ((uint16_t)buf[3] << 8)
-        | buf[4];
+    // *co2ppm =
+    //     ((uint16_t)buf[3] << 8)
+    //     | buf[4];
 
-    return true;
+    // return true;
+
+    S8Frame frame;
+
+    if(!S8_parseFrame(buf,&frame))
+    {
+        return false;
+    }
+
+    *co2ppm = frame.co2;
+
+    return frame.valid;
 }
