@@ -41,8 +41,6 @@
 #include "../processing/data_validator.h"
 #include "../processing/air_quality.h"
 
-#include "../drivers/i2c_manager.h"
-#include "../drivers/uart_manager.h"
 
 // EMA状态
 
@@ -60,11 +58,7 @@ static const uint32_t SAMPLE_INTERVAL = 5000;
 // ============================
 
 void SensorManager_begin()
-{
-    I2CManager_begin(21,22);
-    UARTManager_beginUART1(9600, 4, 5);
-    UARTManager_beginUART2(9600, 16, 17);
-    
+{ 
     HTU21D_begin();
     ZE08_begin();
     S8_begin();

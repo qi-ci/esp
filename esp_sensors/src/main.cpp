@@ -21,11 +21,11 @@
 
 #include "core/system_state.h"
 #include "core/sensor_manager.h"
+#include "core/system_init.h"
 
 void setup()
 {
-    Serial.begin(115200);
-
+    SystemInit();
     SensorManager_begin();
 }
 
