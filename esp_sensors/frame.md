@@ -4779,3 +4779,1110 @@ Byte1~Byte7求和校验
 ```
 
 问题。
+
+
+# 现在开始processing层优化，根据要求记忆的四层优化中的# ③ processing（数据处理层）
+
+## 📌 filter
+
+```text id="filter"
+滑动平均 / EMA滤波
+```
+
+解决：
+
+* 数据抖动（HTU21D）
+* CO2跳变
+* HCHO噪声
+
+---
+
+## 📌 air_quality
+
+负责：
+
+```text id="aq"
+CO2 + HCHO → 空气质量等级
+```
+
+例如：
+
+* 优
+* 良
+* 一般
+* 差
+
+👉 把“规则”从 main.cpp 拆出去
+
+---
+
+## 📌 data_validator
+
+负责：
+
+* NAN过滤
+* 合法范围判断
+* 异常值剔除
+
+例如：
+
+```cpp id="val"
+CO2 < 3000
+HCHO < 1.0
+```
+
+---
+判断哪些文件和代码需要修改，给出每个文件的修改后代码并与之前代码对比，并注释修改说明，按照“--- # 📦 4️⃣ sensors/htu21d_sensor.hcpp id="htu_h" #pragma once void HTU21D_begin(); void HTU21D_read(float* temperature, float* humidity); “格式
+
+很好，现在正式进入第三层：
+
+```text
+Processing Layer V1
+```
+
+这一层与前面的区别非常大：
+
+```text
+Driver Layer
+负责通信
+
+Sensor Layer
+负责采集
+
+Processing Layer
+负责让数据变得可信和有意义
+```
+
+---
+
+# 本轮涉及文件
+
+新增：
+
+```text
+src/processing/
+├── filter.h
+├── filter.cpp
+│
+├── data_validator.h
+├── data_validator.cpp
+│
+├── air_quality.h
+└── air_quality.cpp
+```
+
+---
+
+修改：
+
+```text
+src/main.cpp
+```
+
+（后面会调用这些模块）
+
+---
+
+不修改：
+
+```text
+drivers/*
+sensors/*
+```
+
+因为：
+
+```text
+Processing层不能反向影响Sensor层
+```
+
+这是分层原则。
+
+---
+
+# 📦 1️⃣ processing/filter.h
+
+## 新增
+
+```cpp id="filter_h"
+#pragma once
+
+// EMA滤波器
+
+float Filter_applyEMA(
+    float newValue,
+    float* state,
+    float alpha);
+```
+
+---
+
+## 功能
+
+```text
+输入：
+  新数据
+
+输出：
+  平滑后的数据
+```
+
+用于：
+
+```text
+温度
+湿度
+CO2
+HCHO
+```
+
+---
+
+# 📦 2️⃣ processing/filter.cpp
+
+## 新增
+
+```cpp id="filter_cpp"
+#include "filter.h"
+
+float Filter_applyEMA(
+    float newValue,
+    float* state,
+    float alpha)
+{
+    if(*state != *state)
+    {
+        *state = newValue;
+        return newValue;
+    }
+
+    *state =
+        alpha * newValue
+        + (1.0f - alpha) * (*state);
+
+    return *state;
+}
+```
+
+---
+
+## 修改说明
+
+采用：
+
+```text
+EMA
+Exponential Moving Average
+```
+
+公式：
+
+EMA_t=\alpha x_t+(1-\alpha)EMA_{t-1}
+
+特点：
+
+```text
+占用RAM极小
+适合ESP32
+```
+
+---
+
+# 📦 3️⃣ processing/data_validator.h
+
+## 新增
+
+```cpp id="validator_h"
+#pragma once
+
+bool Validator_temperature(
+    float value);
+
+bool Validator_humidity(
+    float value);
+
+bool Validator_hcho(
+    float value);
+
+bool Validator_co2(
+    int value);
+```
+
+---
+
+## 功能
+
+负责：
+
+```text
+合法性检查
+```
+
+---
+
+# 📦 4️⃣ processing/data_validator.cpp
+
+## 新增
+
+```cpp id="validator_cpp"
+#include <Arduino.h>
+
+#include "data_validator.h"
+
+bool Validator_temperature(
+    float value)
+{
+    if(isnan(value))
+        return false;
+
+    return
+        value >= -40.0f
+        &&
+        value <= 125.0f;
+}
+
+bool Validator_humidity(
+    float value)
+{
+    if(isnan(value))
+        return false;
+
+    return
+        value >= 0.0f
+        &&
+        value <= 100.0f;
+}
+
+bool Validator_hcho(
+    float value)
+{
+    if(isnan(value))
+        return false;
+
+    return
+        value >= 0.0f
+        &&
+        value <= 5.0f;
+}
+
+bool Validator_co2(
+    int value)
+{
+    return
+        value >= 350
+        &&
+        value <= 10000;
+}
+```
+
+---
+
+## 修改说明
+
+解决：
+
+```text
+NAN
+负数
+异常跳变前的明显错误值
+```
+
+---
+
+# 📦 5️⃣ processing/air_quality.h
+
+## 新增
+
+```cpp id="aq_h"
+#pragma once
+
+const char* AirQuality_getLevel(
+    int co2,
+    float hcho);
+```
+
+---
+
+## 功能
+
+负责：
+
+```text
+CO2 + HCHO
+↓
+空气质量等级
+```
+
+---
+
+# 📦 6️⃣ processing/air_quality.cpp
+
+## 新增
+
+```cpp id="aq_cpp"
+#include "air_quality.h"
+
+const char* AirQuality_getLevel(
+    int co2,
+    float hcho)
+{
+    if(co2 < 800 &&
+       hcho < 0.08f)
+    {
+        return "优";
+    }
+
+    if(co2 < 1200 &&
+       hcho < 0.10f)
+    {
+        return "良";
+    }
+
+    if(co2 < 2000 &&
+       hcho < 0.20f)
+    {
+        return "一般";
+    }
+
+    return "差";
+}
+```
+
+---
+
+## 修改说明
+
+规则来自：
+
+```text
+CO2舒适度
++
+甲醛健康风险
+```
+
+输出：
+
+```text
+优
+良
+一般
+差
+```
+
+---
+
+# 📦 7️⃣ main.cpp
+
+---
+
+## 修改前
+
+```cpp id="main_old"
+read sensors
+
+直接输出
+```
+
+---
+
+## 修改后核心逻辑
+
+新增：
+
+```cpp id="main_new"
+#include "processing/filter.h"
+#include "processing/data_validator.h"
+#include "processing/air_quality.h"
+```
+
+---
+
+新增状态变量
+
+```cpp id="state_var"
+float tempFiltered = NAN;
+float humiFiltered = NAN;
+float hchoFiltered = NAN;
+float co2Filtered = NAN;
+```
+
+---
+
+读取后先校验
+
+```cpp id="validate_use"
+if(Validator_temperature(temp))
+{
+    temp =
+        Filter_applyEMA(
+            temp,
+            &tempFiltered,
+            0.3f);
+}
+```
+
+---
+
+湿度
+
+```cpp id="validate_h"
+if(Validator_humidity(humi))
+{
+    humi =
+        Filter_applyEMA(
+            humi,
+            &humiFiltered,
+            0.3f);
+}
+```
+
+---
+
+甲醛
+
+```cpp id="validate_hcho"
+if(Validator_hcho(hcho))
+{
+    hcho =
+        Filter_applyEMA(
+            hcho,
+            &hchoFiltered,
+            0.2f);
+}
+```
+
+---
+
+CO2
+
+```cpp id="validate_co2"
+if(Validator_co2(co2))
+{
+    co2 =
+        (int)
+        Filter_applyEMA(
+            (float)co2,
+            &co2Filtered,
+            0.2f);
+}
+```
+
+---
+
+空气质量
+
+```cpp id="aq_use"
+const char* level =
+    AirQuality_getLevel(
+        co2,
+        hcho);
+```
+
+---
+
+输出
+
+```cpp id="aq_print"
+Serial.printf(
+    "空气质量 : %s\n",
+    level);
+```
+
+---
+
+# Processing Layer V1 完成后的数据流
+
+```text
+HTU21D
+ZE08
+S8
+
+    ↓
+
+Sensor Layer
+
+    ↓
+
+Data Validator
+    ↓
+
+EMA Filter
+    ↓
+
+Air Quality
+
+    ↓
+
+Serial Output
+```
+
+---
+
+# 本阶段获得能力
+
+## filter
+
+```text
+✓ 温度平滑
+✓ 湿度平滑
+✓ CO2平滑
+✓ HCHO平滑
+```
+
+---
+
+## validator
+
+```text
+✓ NAN过滤
+✓ 合法范围检查
+✓ 异常值拦截
+```
+
+---
+
+## air_quality
+
+```text
+✓ 优
+✓ 良
+✓ 一般
+✓ 差
+```
+
+---
+
+# 与之前版本对比
+
+之前：
+
+```text
+传感器
+ ↓
+直接输出
+```
+
+现在：
+
+```text
+传感器
+ ↓
+校验
+ ↓
+滤波
+ ↓
+评分
+ ↓
+输出
+```
+
+此时你的项目已经从：
+
+```text
+传感器测试程序
+```
+
+进入了：
+
+```text
+空气质量监测系统
+```
+
+下一阶段就可以进入你记忆中的第四层：
+
+```text
+core/
+├── sensor_manager
+└── system_state
+```
+
+把全局变量、采样调度和系统状态管理从 `main.cpp` 中彻底移出去。
+
+# 第七步骤7️⃣ main.cpp是什么没有看懂，再次解释
+
+你问得很好，因为前面我写的：
+
+```cpp
+#include "processing/filter.h"
+#include "processing/data_validator.h"
+#include "processing/air_quality.h"
+```
+
+以及：
+
+```cpp
+float tempFiltered = NAN;
+float humiFiltered = NAN;
+...
+```
+
+实际上并不是在创建新的模块，而是在说明：
+
+```text
+main.cpp 如何调用 Processing Layer
+```
+
+很多人第一次做分层架构时，最容易困惑这里。
+
+---
+
+# 先看整体数据流
+
+现在项目已经有：
+
+```text
+drivers/
+sensors/
+processing/
+```
+
+那么 main.cpp 的职责是什么？
+
+实际上就是：
+
+```text
+① 读取传感器
+② 调用处理层
+③ 打印结果
+```
+
+例如：
+
+```text
+HTU21D
+ ↓
+26.7℃
+ ↓
+Filter
+ ↓
+26.6℃
+ ↓
+Serial
+```
+
+---
+
+# 以前的 main.cpp
+
+你最开始是这样：
+
+```cpp
+void loop()
+{
+    readHTU21D();
+    readZE08();
+    readS8();
+
+    Serial.printf(...);
+}
+```
+
+流程：
+
+```text
+传感器
+ ↓
+串口输出
+```
+
+没有任何处理。
+
+---
+
+# 现在的 main.cpp
+
+变成：
+
+```cpp
+void loop()
+{
+    读取传感器
+
+    数据校验
+
+    数据滤波
+
+    空气质量计算
+
+    输出结果
+}
+```
+
+流程：
+
+```text
+传感器
+ ↓
+Validator
+ ↓
+Filter
+ ↓
+AirQuality
+ ↓
+输出
+```
+
+---
+
+# 举例：温度
+
+假设 HTU21D 返回：
+
+```text
+26.4
+26.5
+26.7
+26.3
+26.8
+```
+
+会有轻微抖动。
+
+---
+
+## 第一步
+
+从传感器读取
+
+```cpp
+float temp;
+
+HTU21D_read(
+    &temp,
+    &humidity);
+```
+
+得到：
+
+```cpp
+temp = 26.7;
+```
+
+---
+
+## 第二步
+
+调用 Validator
+
+```cpp
+Validator_temperature(temp)
+```
+
+判断：
+
+```cpp
+26.7
+```
+
+是否合法。
+
+如果：
+
+```cpp
+999℃
+```
+
+或者：
+
+```cpp
+NAN
+```
+
+直接丢弃。
+
+---
+
+## 第三步
+
+调用 Filter
+
+```cpp
+temp =
+    Filter_applyEMA(
+        temp,
+        &tempFiltered,
+        0.3f);
+```
+
+这里：
+
+```cpp
+tempFiltered
+```
+
+是滤波器内部记忆。
+
+---
+
+第一次：
+
+```text
+输入：
+26.7
+
+输出：
+26.7
+```
+
+---
+
+第二次：
+
+```text
+输入：
+26.3
+
+输出：
+26.58
+```
+
+---
+
+第三次：
+
+```text
+输入：
+26.8
+
+输出：
+26.65
+```
+
+这样显示就不会乱跳。
+
+---
+
+# 为什么有
+
+```cpp
+float tempFiltered = NAN;
+```
+
+这一句？
+
+因为 EMA 需要保存上一次结果。
+
+例如：
+
+公式：
+
+EMA_t=\alpha x_t+(1-\alpha)EMA_{t-1}
+
+需要：
+
+```text
+本次数据
++
+上次结果
+```
+
+所以必须保存：
+
+```cpp
+tempFiltered
+```
+
+---
+
+# HCHO 同理
+
+假设：
+
+```text
+0.045
+0.046
+0.042
+0.050
+```
+
+原始值会抖动。
+
+处理后：
+
+```text
+0.045
+0.0452
+0.0446
+0.0457
+```
+
+更稳定。
+
+---
+
+# CO2 同理
+
+原始：
+
+```text
+700
+715
+690
+730
+705
+```
+
+处理后：
+
+```text
+700
+703
+700
+706
+706
+```
+
+不会突然跳来跳去。
+
+---
+
+# AirQuality 在哪里用？
+
+滤波完成后：
+
+```cpp
+const char* level =
+    AirQuality_getLevel(
+        co2,
+        hcho);
+```
+
+例如：
+
+```cpp
+co2 = 650;
+hcho = 0.03;
+```
+
+返回：
+
+```cpp
+"优"
+```
+
+---
+
+然后输出：
+
+```cpp
+Serial.printf(
+    "空气质量 : %s\n",
+    level);
+```
+
+结果：
+
+```text
+空气质量 : 优
+```
+
+---
+
+# 为什么我说这部分以后会消失？
+
+因为你记忆中的最终架构还有：
+
+```text
+core/
+├── sensor_manager
+├── system_state
+```
+
+到了下一阶段：
+
+```text
+Core Layer
+```
+
+这些代码：
+
+```cpp
+Validator_xxx()
+
+Filter_xxx()
+
+AirQuality_xxx()
+```
+
+会从 main.cpp 移出去。
+
+变成：
+
+```text
+main.cpp
+ ↓
+
+sensor_manager.update()
+
+ ↓
+
+自动完成
+
+采集
+校验
+滤波
+评分
+```
+
+最后 main.cpp 会缩成：
+
+```cpp
+void loop()
+{
+    SensorManager_update();
+
+    OutputFormatter_print();
+
+    delay(5000);
+}
+```
+
+---
+
+所以第 7 步的本质不是新增一个模块，而是在告诉你：
+
+```text
+Processing Layer 创建好了以后，
+main.cpp 需要如何调用这些模块。
+```
+
+等下一步进入 Core Layer 时，这些调用会再次从 main.cpp 搬到 `sensor_manager.cpp` 里面。这样整个项目就真正符合你已经保存到记忆里的四层架构了。
+
+# 看懂了，现在现在开始core层优化，根据要求记忆的四层优化中的# ④ core（系统核心层）
+
+## 📌 sensor_manager（最重要）
+
+👉 这是整个系统“中枢”
+
+职责：
+
+* 统一调度3个传感器
+* 控制采样频率
+* 管理状态
+* 防止阻塞
+
+---
+
+### 它解决你现在最大问题：
+
+❌ loop里直接读
+✔ 改为统一调度器
+
+---
+
+## 📌 system_state
+
+保存：
+
+```text id="state"
+系统运行状态
+传感器状态
+错误状态
+重启计数
+```
+
+👉 用于长期运行稳定性
+
+---
+判断哪些文件和代码需要修改，给出每个文件的修改后代码并与之前代码对比，并注释修改说明，按照“--- # 📦 4️⃣ sensors/htu21d_sensor.hcpp id="htu_h" #pragma once void HTU21D_begin(); void HTU21D_read(float* temperature, float* humidity); “格式
+
