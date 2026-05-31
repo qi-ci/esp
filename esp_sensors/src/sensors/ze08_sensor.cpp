@@ -11,21 +11,50 @@ void ZE08_begin()
 
 void ZE08_read(float* hcho)
 {
-    HardwareSerial& serial = UARTManager_getUART2();
-    // while (ze08Serial.available() >= 9)
-    while(serial.available() >= 9)
+    // HardwareSerial& serial = UARTManager_getUART2();
+    // // while (ze08Serial.available() >= 9)
+    // while(serial.available() >= 9)
+    // {
+    //     uint8_t buf[9];
+    //     // ze08Serial.readBytes(buf, 9);
+    //     serial.readBytes(buf, 9);
+
+    //     if (buf[0] == 0xFF)
+    //     {
+    //         uint16_t value =
+    //             ((uint16_t)buf[4] << 8) |
+    //             buf[5];
+
+    //         *hcho = value / 1000.0f;
+    //     }
+    // }
+    HardwareSerial& serial =
+        UARTManager_getUART2();
+
+    uint8_t buf[9];
+
+    while(UARTManager_hasData(serial))
     {
-        uint8_t buf[9];
-        // ze08Serial.readBytes(buf, 9);
-        serial.readBytes(buf, 9);
-
-        if (buf[0] == 0xFF)
+        if(
+            UARTManager_readFrame(
+                serial,
+                buf,
+                9,
+                50))
         {
-            uint16_t value =
-                ((uint16_t)buf[4] << 8) |
-                buf[5];
+            if(buf[0] == 0xFF)
+            {
+                uint16_t value =
+                    ((uint16_t)buf[4] << 8)
+                    | buf[5];
 
-            *hcho = value / 1000.0f;
+                *hcho =
+                    value / 1000.0f;
+            }
+        }
+        else
+        {
+            break;
         }
     }
 }

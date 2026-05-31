@@ -49,36 +49,60 @@ void S8_read(int* co2ppm)
     cmd[6] = crc & 0xFF;
     cmd[7] = crc >> 8;
 
-    // while (s8Serial.available())
-    //     s8Serial.read();
+    // // while (s8Serial.available())
+    // //     s8Serial.read();
 
-    // s8Serial.write(cmd, 8);
-    while(serial.available())
-    {
-        serial.read();
-    }
+    // // s8Serial.write(cmd, 8);
+    // while(serial.available())
+    // {
+    //     serial.read();
+    // }
 
-    serial.write(cmd,8);
+    // serial.write(cmd,8);
 
-    delay(120);
+    // delay(120);
 
-    // if (s8Serial.available() >= 7)
+    // // if (s8Serial.available() >= 7)
+    // // {
+    // //     uint8_t buf[7];
+    // //     s8Serial.readBytes(buf, 7);
+
+    // //     *co2ppm =
+    // //         ((uint16_t)buf[3] << 8) |
+    // //         buf[4];
+    // // }
+    // if (serial.available() >= 7)
     // {
     //     uint8_t buf[7];
-    //     s8Serial.readBytes(buf, 7);
-
+    //     serial.readBytes(buf, 7);
+    
     //     *co2ppm =
     //         ((uint16_t)buf[3] << 8) |
     //         buf[4];
     // }
-    if (serial.available() >= 7)
+    // else
+    // {
+    //     *co2ppm = -1;
+    // }
+    UARTManager_clearBuffer(
+        serial);
+
+    serial.write(
+        cmd,
+        8);
+
+    uint8_t buf[7];
+
+    if(
+        UARTManager_readFrame(
+            serial,
+            buf,
+            7,
+            200))
     {
-        uint8_t buf[7];
-        serial.readBytes(buf, 7);
-    
         *co2ppm =
-            ((uint16_t)buf[3] << 8) |
-            buf[4];
+            ((uint16_t)buf[3] << 8)
+            | buf[4];
     }
     else
     {

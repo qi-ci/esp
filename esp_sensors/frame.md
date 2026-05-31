@@ -2123,4 +2123,671 @@ Sensor层负责“使用能力”
 
 这是后续优化时最重要的分层边界。
 
+# 下一阶段进入 Sensor Layer把这些把这些新Driver能力真正接入，不完成sensors（传感器驱动层）任何新的优化，仅完成driver层功能，判断哪些文件和代码需要修改，给出每个文件的修改后代码并与之前代码对比，并注释修改说明，按照“--- # 📦 4️⃣ sensors/htu21d_sensor.h cpp id="htu_h" #pragma once void HTU21D_begin(); void HTU21D_read(float* temperature, float* humidity); “格式
 
+很好，这一步要特别注意边界。
+
+你的要求是：
+
+```text
+使用 Driver Layer V2 提供的新能力
+但不新增任何 Sensor Layer 逻辑优化
+```
+
+也就是说：
+
+❌ 不做：
+
+* CRC校验
+* 数据合法性判断
+* 状态管理
+* 自动重连
+* 帧同步增强
+* 超时重试
+
+只做：
+
+```text
+Sensor Layer 从直接调用 Wire / HardwareSerial
+↓
+改成调用 Driver Layer API
+```
+
+这属于：
+
+```text
+架构依赖迁移
+而不是功能优化
+```
+
+---
+
+# 本轮涉及文件
+
+修改：
+
+```text
+src/sensors/
+├── htu21d_sensor.cpp
+├── ze08_sensor.cpp
+└── s8_sensor.cpp
+```
+
+保持不变：
+
+```text
+src/sensors/
+├── htu21d_sensor.h
+├── ze08_sensor.h
+└── s8_sensor.h
+```
+
+以及：
+
+```text
+drivers/*
+```
+
+全部不改。
+
+---
+
+# 📦 1️⃣ sensors/htu21d_sensor.h
+
+---
+
+## 修改前
+
+```cpp id="htu_h_old"
+#pragma once
+
+void HTU21D_begin();
+
+void HTU21D_read(
+    float* temperature,
+    float* humidity);
+```
+
+---
+
+## 修改后
+
+```cpp id="htu_h_new"
+#pragma once
+
+void HTU21D_begin();
+
+void HTU21D_read(
+    float* temperature,
+    float* humidity);
+```
+
+---
+
+## 修改说明
+
+```text
+无修改
+```
+
+因为：
+
+```text
+Driver层变化
+不影响HTU21D对外接口
+```
+
+---
+
+# 📦 2️⃣ sensors/htu21d_sensor.cpp
+
+---
+
+## 修改前
+
+```cpp id="htu_cpp_old"
+#include <HTU21D.h>
+
+#include "drivers/i2c_manager.h"
+
+HTU21D htu;
+
+void HTU21D_begin()
+{
+    I2CManager_begin(
+        21,
+        22);
+
+    htu.begin();
+}
+
+void HTU21D_read(
+    float* temperature,
+    float* humidity)
+{
+    *temperature =
+        htu.readTemperature();
+
+    *humidity =
+        htu.readHumidity();
+}
+```
+
+---
+
+## 修改后
+
+```cpp id="htu_cpp_new"
+#include <HTU21D.h>
+
+#include "drivers/i2c_manager.h"
+
+HTU21D htu;
+
+void HTU21D_begin()
+{
+    I2CManager_begin(
+        21,
+        22);
+
+    htu.begin();
+}
+
+void HTU21D_read(
+    float* temperature,
+    float* humidity)
+{
+    *temperature =
+        htu.readTemperature();
+
+    *humidity =
+        htu.readHumidity();
+}
+```
+
+---
+
+## 修改说明
+
+```text
+无修改
+```
+
+原因：
+
+```text
+HTU21D库内部直接使用Wire
+```
+
+目前 Driver Layer 的：
+
+```cpp
+I2CManager_scan()
+I2CManager_deviceExists()
+I2CManager_recoverBus()
+```
+
+还属于额外能力。
+
+本阶段不做：
+
+```text
+设备检测
+总线恢复
+```
+
+所以无需修改。
+
+---
+
+# 📦 3️⃣ sensors/ze08_sensor.h
+
+---
+
+## 修改前
+
+```cpp id="ze_h_old"
+#pragma once
+
+void ZE08_begin();
+
+void ZE08_read(
+    float* hcho);
+```
+
+---
+
+## 修改后
+
+```cpp id="ze_h_new"
+#pragma once
+
+void ZE08_begin();
+
+void ZE08_read(
+    float* hcho);
+```
+
+---
+
+## 修改说明
+
+```text
+无修改
+```
+
+---
+
+# 📦 4️⃣ sensors/ze08_sensor.cpp
+
+---
+
+## 修改前
+
+```cpp id="ze_cpp_old"
+#include "drivers/uart_manager.h"
+
+void ZE08_begin()
+{
+    UARTManager_beginUART2(
+        9600,
+        16,
+        17);
+}
+
+void ZE08_read(float* hcho)
+{
+    HardwareSerial& serial =
+        UARTManager_getUART2();
+
+    while (serial.available() >= 9)
+    {
+        uint8_t buf[9];
+
+        serial.readBytes(
+            buf,
+            9);
+
+        if (buf[0] == 0xFF)
+        {
+            uint16_t value =
+                ((uint16_t)buf[4] << 8)
+                | buf[5];
+
+            *hcho =
+                value / 1000.0f;
+        }
+    }
+}
+```
+
+---
+
+## 修改后
+
+```cpp id="ze_cpp_new"
+#include "drivers/uart_manager.h"
+
+void ZE08_begin()
+{
+    UARTManager_beginUART2(
+        9600,
+        16,
+        17);
+}
+
+void ZE08_read(float* hcho)
+{
+    HardwareSerial& serial =
+        UARTManager_getUART2();
+
+    uint8_t buf[9];
+
+    while(UARTManager_hasData(serial))
+    {
+        if(
+            UARTManager_readFrame(
+                serial,
+                buf,
+                9,
+                50))
+        {
+            if(buf[0] == 0xFF)
+            {
+                uint16_t value =
+                    ((uint16_t)buf[4] << 8)
+                    | buf[5];
+
+                *hcho =
+                    value / 1000.0f;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+```
+
+---
+
+## 修改说明
+
+### 修改前
+
+直接调用：
+
+```cpp
+serial.available()
+
+serial.readBytes()
+```
+
+---
+
+### 修改后
+
+统一通过 Driver：
+
+```cpp
+UARTManager_hasData()
+
+UARTManager_readFrame()
+```
+
+---
+
+实现：
+
+```text
+Sensor层不直接操作HardwareSerial
+```
+
+---
+
+# 📦 5️⃣ sensors/s8_sensor.h
+
+---
+
+## 修改前
+
+```cpp id="s8_h_old"
+#pragma once
+
+void S8_begin();
+
+void S8_read(
+    int* co2ppm);
+```
+
+---
+
+## 修改后
+
+```cpp id="s8_h_new"
+#pragma once
+
+void S8_begin();
+
+void S8_read(
+    int* co2ppm);
+```
+
+---
+
+## 修改说明
+
+```text
+无修改
+```
+
+---
+
+# 📦 6️⃣ sensors/s8_sensor.cpp
+
+---
+
+## 修改前
+
+核心部分：
+
+```cpp id="s8_old_core"
+while(serial.available())
+{
+    serial.read();
+}
+
+serial.write(cmd,8);
+
+delay(120);
+
+if(serial.available() >= 7)
+{
+    uint8_t buf[7];
+
+    serial.readBytes(
+        buf,
+        7);
+
+    ...
+}
+```
+
+---
+
+## 修改后
+
+```cpp id="s8_cpp_new"
+#include <Arduino.h>
+
+#include "drivers/uart_manager.h"
+
+uint16_t modbusCRC(
+    uint8_t *buf,
+    uint8_t len)
+{
+    uint16_t crc = 0xFFFF;
+
+    for(uint8_t pos = 0;
+        pos < len;
+        pos++)
+    {
+        crc ^= (uint16_t)buf[pos];
+
+        for(int i = 8;
+            i != 0;
+            i--)
+        {
+            if(crc & 0x0001)
+            {
+                crc >>= 1;
+                crc ^= 0xA001;
+            }
+            else
+            {
+                crc >>= 1;
+            }
+        }
+    }
+
+    return crc;
+}
+
+void S8_begin()
+{
+    UARTManager_beginUART1(
+        9600,
+        4,
+        5);
+}
+
+void S8_read(int* co2ppm)
+{
+    HardwareSerial& serial =
+        UARTManager_getUART1();
+
+    uint8_t cmd[8] =
+    {
+        0xFE,0x04,0x00,0x03,
+        0x00,0x01,0x00,0x00
+    };
+
+    uint16_t crc =
+        modbusCRC(cmd,6);
+
+    cmd[6] = crc & 0xFF;
+    cmd[7] = crc >> 8;
+
+    UARTManager_clearBuffer(
+        serial);
+
+    serial.write(
+        cmd,
+        8);
+
+    uint8_t buf[7];
+
+    if(
+        UARTManager_readFrame(
+            serial,
+            buf,
+            7,
+            200))
+    {
+        *co2ppm =
+            ((uint16_t)buf[3] << 8)
+            | buf[4];
+    }
+    else
+    {
+        *co2ppm = -1;
+    }
+}
+```
+
+---
+
+## 修改说明
+
+### 删除
+
+```cpp
+while(serial.available())
+{
+    serial.read();
+}
+```
+
+改为：
+
+```cpp
+UARTManager_clearBuffer()
+```
+
+---
+
+### 删除
+
+```cpp
+delay(120);
+
+if(serial.available() >= 7)
+```
+
+改为：
+
+```cpp
+UARTManager_readFrame(...)
+```
+
+---
+
+注意：
+
+这里虽然用了：
+
+```cpp
+UARTManager_readFrame()
+```
+
+但这仍然属于：
+
+```text
+Driver能力接入
+```
+
+不是：
+
+```text
+S8协议优化
+```
+
+因为：
+
+```text
+没有新增任何业务逻辑
+没有新增CRC验证
+没有新增状态机
+没有新增重试
+```
+
+只是把等待和读取交给 Driver。
+
+---
+
+# Sensor Layer 第一阶段完成后
+
+依赖关系变成：
+
+```text
+HTU21D
+ ↓
+i2c_manager
+
+ZE08
+ ↓
+uart_manager
+
+S8
+ ↓
+uart_manager
+```
+
+而不是：
+
+```text
+HTU21D
+ ↓
+Wire
+
+ZE08
+ ↓
+HardwareSerial
+
+S8
+ ↓
+HardwareSerial
+```
+
+---
+
+# 当前完成内容
+
+```text
+✓ Driver Layer 提供能力
+✓ Sensor Layer 使用能力
+
+✓ clearBuffer接入
+✓ readFrame接入
+✓ hasData接入
+
+✗ CRC校验
+✗ timeout重试
+✗ 状态管理
+✗ 自动恢复
+✗ 帧同步
+✗ 数据验证
+```
+
+这时 Driver Layer 的抽象才算真正落地，下一步再进入 Sensor Layer 优化时，所有优化都会基于统一的 `i2c_manager` 和 `uart_manager` 展开，而不会再直接操作底层硬件接口。
