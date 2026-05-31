@@ -1405,3 +1405,722 @@ uart_manager
 ```
 
 而不是直接进入 Sensor Layer。
+
+# 下一步如果继续优化 Driver Layer考虑： i2c_manager ├── I2C扫描 ├── 设备检测 └── 总线恢复 uart_manager ├── 超时读取 ├── 帧读取 ├── 缓冲区管理 └── 串口状态检测判断哪些文件和代码需要修改，给出每个文件的修改后代码并与之前代码对比，并注释修改说明，按照“--- # 📦 4️⃣ sensors/htu21d_sensor.h cpp id="htu_h" #pragma once void HTU21D_begin(); void HTU21D_read(float* temperature, float* humidity); “格式
+
+很好，这一步仍然只属于：
+
+```text
+Driver Layer V2
+```
+
+与之前不同的是：
+
+```text
+Driver Layer V1
+↓
+仅完成资源抽象
+
+Driver Layer V2
+↓
+增加驱动能力
+```
+
+这时开始真正体现 Driver 层价值。
+
+---
+
+# 本轮涉及文件
+
+修改：
+
+```text
+src/drivers/
+├── i2c_manager.h
+├── i2c_manager.cpp
+├── uart_manager.h
+└── uart_manager.cpp
+```
+
+新增：
+
+```text
+无
+```
+
+其它文件：
+
+```text
+保持不变
+```
+
+原因：
+
+```text
+Driver层优化
+不应该影响Sensor层接口
+```
+
+这也是分层架构的意义。
+
+---
+
+# 📦 1️⃣ drivers/i2c_manager.h
+
+---
+
+## 修改前
+
+```cpp
+#pragma once
+
+#include <Wire.h>
+
+void I2CManager_begin(
+    uint8_t sdaPin,
+    uint8_t sclPin);
+
+TwoWire& I2CManager_getBus();
+```
+
+---
+
+## 修改后
+
+```cpp
+#pragma once
+
+#include <Arduino.h>
+#include <Wire.h>
+
+void I2CManager_begin(
+    uint8_t sdaPin,
+    uint8_t sclPin);
+
+TwoWire& I2CManager_getBus();
+
+
+// =========================
+// 设备检测
+// =========================
+
+bool I2CManager_deviceExists(
+    uint8_t address);
+
+
+// =========================
+// I2C扫描
+// =========================
+
+uint8_t I2CManager_scan(
+    uint8_t* addresses,
+    uint8_t maxCount);
+
+
+// =========================
+// 总线恢复
+// =========================
+
+bool I2CManager_recoverBus();
+```
+
+---
+
+## 修改说明
+
+新增：
+
+```cpp
+I2CManager_deviceExists()
+```
+
+用于：
+
+```text
+检测0x40是否存在
+```
+
+---
+
+新增：
+
+```cpp
+I2CManager_scan()
+```
+
+用于：
+
+```text
+扫描全部I2C设备
+```
+
+---
+
+新增：
+
+```cpp
+I2CManager_recoverBus()
+```
+
+用于：
+
+```text
+SDA被拉低
+总线锁死
+```
+
+恢复。
+
+---
+
+# 📦 2️⃣ drivers/i2c_manager.cpp
+
+---
+
+## 修改前
+
+```cpp
+#include "i2c_manager.h"
+
+void I2CManager_begin(
+    uint8_t sdaPin,
+    uint8_t sclPin)
+{
+    Wire.begin(
+        sdaPin,
+        sclPin);
+}
+
+TwoWire& I2CManager_getBus()
+{
+    return Wire;
+}
+```
+
+---
+
+## 修改后
+
+```cpp
+#include "i2c_manager.h"
+
+static uint8_t g_sdaPin;
+static uint8_t g_sclPin;
+
+void I2CManager_begin(
+    uint8_t sdaPin,
+    uint8_t sclPin)
+{
+    g_sdaPin = sdaPin;
+    g_sclPin = sclPin;
+
+    Wire.begin(
+        sdaPin,
+        sclPin);
+}
+
+TwoWire& I2CManager_getBus()
+{
+    return Wire;
+}
+
+
+// =========================
+// 设备检测
+// =========================
+
+bool I2CManager_deviceExists(
+    uint8_t address)
+{
+    Wire.beginTransmission(address);
+
+    return
+        Wire.endTransmission()
+        == 0;
+}
+
+
+// =========================
+// I2C扫描
+// =========================
+
+uint8_t I2CManager_scan(
+    uint8_t* addresses,
+    uint8_t maxCount)
+{
+    uint8_t count = 0;
+
+    for(uint8_t addr = 1;
+        addr < 127;
+        addr++)
+    {
+        if(I2CManager_deviceExists(addr))
+        {
+            if(count < maxCount)
+            {
+                addresses[count] = addr;
+            }
+
+            count++;
+        }
+    }
+
+    return count;
+}
+
+
+// =========================
+// 总线恢复
+// =========================
+
+bool I2CManager_recoverBus()
+{
+    pinMode(
+        g_sclPin,
+        OUTPUT_OPEN_DRAIN);
+
+    pinMode(
+        g_sdaPin,
+        INPUT_PULLUP);
+
+    for(int i = 0; i < 9; i++)
+    {
+        digitalWrite(g_sclPin, LOW);
+        delayMicroseconds(5);
+
+        digitalWrite(g_sclPin, HIGH);
+        delayMicroseconds(5);
+    }
+
+    Wire.begin(
+        g_sdaPin,
+        g_sclPin);
+
+    return true;
+}
+```
+
+---
+
+## 修改说明
+
+新增能力：
+
+```text
+设备检测
+设备扫描
+总线恢复
+```
+
+但：
+
+```text
+没有任何Sensor层代码改动
+```
+
+---
+
+# 📦 3️⃣ drivers/uart_manager.h
+
+---
+
+## 修改前
+
+```cpp
+#pragma once
+
+#include <Arduino.h>
+
+HardwareSerial& UARTManager_getUART1();
+
+HardwareSerial& UARTManager_getUART2();
+
+void UARTManager_beginUART1(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin);
+
+void UARTManager_beginUART2(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin);
+```
+
+---
+
+## 修改后
+
+```cpp
+#pragma once
+
+#include <Arduino.h>
+
+HardwareSerial& UARTManager_getUART1();
+
+HardwareSerial& UARTManager_getUART2();
+
+void UARTManager_beginUART1(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin);
+
+void UARTManager_beginUART2(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin);
+
+
+// =========================
+// Buffer管理
+// =========================
+
+void UARTManager_clearBuffer(
+    HardwareSerial& serial);
+
+
+// =========================
+// 超时读取
+// =========================
+
+size_t UARTManager_readBytesTimeout(
+    HardwareSerial& serial,
+    uint8_t* buffer,
+    size_t length,
+    uint32_t timeoutMs);
+
+
+// =========================
+// 帧读取
+// =========================
+
+bool UARTManager_readFrame(
+    HardwareSerial& serial,
+    uint8_t* buffer,
+    size_t frameSize,
+    uint32_t timeoutMs);
+
+
+// =========================
+// 串口状态
+// =========================
+
+bool UARTManager_hasData(
+    HardwareSerial& serial);
+```
+
+---
+
+## 修改说明
+
+增加统一UART工具。
+
+以后：
+
+```cpp
+serial.readBytes(...)
+```
+
+逐步迁移成：
+
+```cpp
+UARTManager_readFrame(...)
+```
+
+---
+
+# 📦 4️⃣ drivers/uart_manager.cpp
+
+---
+
+## 修改前
+
+```cpp
+#include "uart_manager.h"
+
+static HardwareSerial uart1(1);
+static HardwareSerial uart2(2);
+
+...
+```
+
+---
+
+## 修改后
+
+```cpp
+#include "uart_manager.h"
+
+static HardwareSerial uart1(1);
+static HardwareSerial uart2(2);
+
+HardwareSerial& UARTManager_getUART1()
+{
+    return uart1;
+}
+
+HardwareSerial& UARTManager_getUART2()
+{
+    return uart2;
+}
+
+void UARTManager_beginUART1(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin)
+{
+    uart1.begin(
+        baudrate,
+        SERIAL_8N1,
+        rxPin,
+        txPin);
+}
+
+void UARTManager_beginUART2(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin)
+{
+    uart2.begin(
+        baudrate,
+        SERIAL_8N1,
+        rxPin,
+        txPin);
+}
+
+
+// =========================
+// Buffer管理
+// =========================
+
+void UARTManager_clearBuffer(
+    HardwareSerial& serial)
+{
+    while(serial.available())
+    {
+        serial.read();
+    }
+}
+
+
+// =========================
+// 超时读取
+// =========================
+
+size_t UARTManager_readBytesTimeout(
+    HardwareSerial& serial,
+    uint8_t* buffer,
+    size_t length,
+    uint32_t timeoutMs)
+{
+    uint32_t start =
+        millis();
+
+    size_t received = 0;
+
+    while(received < length)
+    {
+        while(serial.available())
+        {
+            buffer[received++] =
+                serial.read();
+
+            if(received >= length)
+            {
+                return received;
+            }
+        }
+
+        if(millis() - start > timeoutMs)
+        {
+            break;
+        }
+    }
+
+    return received;
+}
+
+
+// =========================
+// 帧读取
+// =========================
+
+bool UARTManager_readFrame(
+    HardwareSerial& serial,
+    uint8_t* buffer,
+    size_t frameSize,
+    uint32_t timeoutMs)
+{
+    return
+        UARTManager_readBytesTimeout(
+            serial,
+            buffer,
+            frameSize,
+            timeoutMs)
+        == frameSize;
+}
+
+
+// =========================
+// 串口状态
+// =========================
+
+bool UARTManager_hasData(
+    HardwareSerial& serial)
+{
+    return serial.available() > 0;
+}
+```
+
+---
+
+## 修改说明
+
+新增：
+
+### Buffer管理
+
+统一替代：
+
+```cpp
+while(serial.available())
+{
+    serial.read();
+}
+```
+
+---
+
+### 超时读取
+
+统一替代：
+
+```cpp
+delay(120);
+
+if(serial.available() >= 7)
+```
+
+这种写法。
+
+---
+
+### 帧读取
+
+统一读取：
+
+```text
+S8固定7字节
+ZE08固定9字节
+```
+
+---
+
+### 状态检测
+
+统一判断：
+
+```cpp
+UARTManager_hasData(...)
+```
+
+---
+
+# Driver Layer V2 完成后的架构
+
+```text
+main
+ ↓
+
+sensor_manager
+ ↓
+
+htu21d_sensor
+ze08_sensor
+s8_sensor
+
+ ↓
+
+i2c_manager
+├── begin
+├── scan
+├── deviceExists
+└── recoverBus
+
+uart_manager
+├── begin
+├── clearBuffer
+├── readBytesTimeout
+├── readFrame
+└── hasData
+
+ ↓
+
+Wire
+HardwareSerial
+```
+
+---
+
+# 此阶段获得的能力
+
+## i2c_manager
+
+```text
+✓ 初始化
+✓ 扫描
+✓ 设备检测
+✓ 总线恢复
+```
+
+---
+
+## uart_manager
+
+```text
+✓ UART统一管理
+✓ Buffer管理
+✓ 超时读取
+✓ 固定帧读取
+✓ 串口状态检测
+```
+
+---
+
+注意：
+
+```text
+此时 Sensor Layer 还没有使用这些新能力
+```
+
+例如：
+
+```cpp
+S8_read()
+```
+
+仍然可能保留：
+
+```cpp
+delay(120);
+
+if(serial.available() >= 7)
+```
+
+下一阶段才会进入 Sensor Layer，把这些新Driver能力真正接入到：
+
+```text
+htu21d_sensor
+ze08_sensor
+s8_sensor
+```
+
+内部。这样你可以清晰看到：
+
+```text
+Driver层负责“提供能力”
+Sensor层负责“使用能力”
+```
+
+这是后续优化时最重要的分层边界。
+
+

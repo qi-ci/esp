@@ -36,3 +36,86 @@ void UARTManager_beginUART2(
         rxPin,
         txPin);
 }
+
+
+// =========================
+// Buffer管理
+// =========================
+
+void UARTManager_clearBuffer(
+    HardwareSerial& serial)
+{
+    while(serial.available())
+    {
+        serial.read();
+    }
+}
+
+
+// =========================
+// 超时读取
+// =========================
+
+size_t UARTManager_readBytesTimeout(
+    HardwareSerial& serial,
+    uint8_t* buffer,
+    size_t length,
+    uint32_t timeoutMs)
+{
+    uint32_t start =
+        millis();
+
+    size_t received = 0;
+
+    while(received < length)
+    {
+        while(serial.available())
+        {
+            buffer[received++] =
+                serial.read();
+
+            if(received >= length)
+            {
+                return received;
+            }
+        }
+
+        if(millis() - start > timeoutMs)
+        {
+            break;
+        }
+    }
+
+    return received;
+}
+
+
+// =========================
+// 帧读取
+// =========================
+
+bool UARTManager_readFrame(
+    HardwareSerial& serial,
+    uint8_t* buffer,
+    size_t frameSize,
+    uint32_t timeoutMs)
+{
+    return
+        UARTManager_readBytesTimeout(
+            serial,
+            buffer,
+            frameSize,
+            timeoutMs)
+        == frameSize;
+}
+
+
+// =========================
+// 串口状态
+// =========================
+
+bool UARTManager_hasData(
+    HardwareSerial& serial)
+{
+    return serial.available() > 0;
+}
