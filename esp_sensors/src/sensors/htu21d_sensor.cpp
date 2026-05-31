@@ -4,15 +4,54 @@
 
 HTU21D htu;
 
-void HTU21D_begin()
+// void HTU21D_begin()
+// {
+//     // Wire.begin(21, 22);
+//     I2CManager_begin(21, 22);
+//     htu.begin();
+// }
+
+// void HTU21D_read(float* temperature, float* humidity)
+// {
+//     *temperature = htu.readTemperature();
+//     *humidity = htu.readHumidity();
+// }
+
+static bool g_ready = false;
+
+bool HTU21D_begin()
 {
-    // Wire.begin(21, 22);
     I2CManager_begin(21, 22);
-    htu.begin();
+
+    g_ready = htu.begin();
+
+    return g_ready;
 }
 
-void HTU21D_read(float* temperature, float* humidity)
+bool HTU21D_isReady()
 {
-    *temperature = htu.readTemperature();
-    *humidity = htu.readHumidity();
+    return g_ready;
+}
+
+bool HTU21D_read(
+    float* temperature,
+    float* humidity)
+{
+    if(!g_ready)
+    {
+        return false;
+    }
+
+    float t = htu.readTemperature();
+    float h = htu.readHumidity();
+
+    if(isnan(t) || isnan(h))
+    {
+        return false;
+    }
+
+    *temperature = t;
+    *humidity = h;
+
+    return true;
 }
