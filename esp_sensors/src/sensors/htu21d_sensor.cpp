@@ -1,11 +1,13 @@
-#include <Wire.h>
+// #include <Wire.h>
+#include "drivers/i2c_manager.h"
 #include <HTU21D.h>
 
 HTU21D htu;
 
 void HTU21D_begin()
 {
-    Wire.begin(21, 22);
+    // Wire.begin(21, 22);
+    I2CManager_begin(21, 22);
     htu.begin();
 }
 

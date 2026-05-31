@@ -786,3 +786,622 @@ SensorManager
 Reporter
     ↓
 初始化输出模块
+
+# 这是之前你给出四个层面优化，把它写入记忆中，后面我将一步一步提问，根据这四个层面内容完成优化项目，所以现在写入记忆，然后等待我的分层提问
+
+已经记录。
+
+后续我们讨论这个空气质量检测项目时，我会默认以你定义的 Air Monitor V2 分层架构 为基准：
+
+① Driver Layer
+② Sensor Layer
+③ Processing Layer
+④ Core / Application Layer
+
+以及对应目录结构：
+
+drivers/
+sensors/
+processing/
+core/
+app/
+
+并遵循你当前的开发方式：
+
+先理解架构
+↓
+再逐层优化
+↓
+每次只修改当前层
+↓
+不跨层引入复杂逻辑
+↓
+保持项目始终可编译
+
+
+# 现在处理drivers层，判断哪些文件和代码需要修改，给出每个文件的修改后代码并与之前代码对比，并注释修改说明，按照“--- # 📦 4️⃣ sensors/htu21d_sensor.h
+cpp id="htu_h"
+#pragma once
+
+void HTU21D_begin();
+void HTU21D_read(float* temperature, float* humidity);
+“格式 ---# ① drivers（底层通信抽象层） ## 📌 i2c_manager text id="i2c" 统一管理 I2C 作用： * 初始化 I2C * 扫描设备 * 统一读写接口 👉 防止 HTU21D 直接依赖 Wire --- ## 📌 uart_manager text id="uart" 统一管理 UART0/1/2 作用： * S8 UART * ZE08 UART * 超时控制 * buffer管理 👉 解决你现在“available不可靠”的问题
+
+很好，现在我们严格遵循你的原则：
+
+```text
+只处理 Driver Layer
+不处理 Sensor Layer
+不处理 Processing Layer
+不处理 Core Layer
+不引入额外优化
+只完成架构分层
+```
+
+因此本轮目标仅仅是：
+
+```text
+把 Wire 抽离到 i2c_manager
+把 HardwareSerial 抽离到 uart_manager
+```
+
+不增加：
+
+* CRC优化
+* Timeout优化
+* 状态机
+* Buffer管理
+
+这些后面再做。
+
+---
+
+# 本轮涉及哪些文件
+
+新增：
+
+```text
+src/drivers/
+├── i2c_manager.h
+├── i2c_manager.cpp
+├── uart_manager.h
+└── uart_manager.cpp
+```
+
+修改：
+
+```text
+src/sensors/
+├── htu21d_sensor.cpp
+├── ze08_sensor.cpp
+└── s8_sensor.cpp
+```
+
+其余文件：
+
+```text
+保持不变
+```
+
+---
+
+# 📦 1️⃣ drivers/i2c_manager.h
+
+新增文件
+
+```cpp
+#pragma once
+
+#include <Wire.h>
+
+void I2CManager_begin(
+    uint8_t sdaPin,
+    uint8_t sclPin);
+
+TwoWire& I2CManager_getBus();
+```
+
+---
+
+## 修改说明
+
+以前：
+
+```cpp
+Wire.begin(...)
+```
+
+直接写在：
+
+```cpp
+htu21d_sensor.cpp
+```
+
+现在：
+
+```cpp
+I2CManager_begin(...)
+```
+
+统一管理。
+
+---
+
+# 📦 2️⃣ drivers/i2c_manager.cpp
+
+新增文件
+
+```cpp
+#include "i2c_manager.h"
+
+void I2CManager_begin(
+    uint8_t sdaPin,
+    uint8_t sclPin)
+{
+    Wire.begin(
+        sdaPin,
+        sclPin);
+}
+
+TwoWire& I2CManager_getBus()
+{
+    return Wire;
+}
+```
+
+---
+
+## 修改说明
+
+目前只是简单封装：
+
+```cpp
+Wire.begin()
+```
+
+以后：
+
+```cpp
+I2C扫描
+总线恢复
+设备检测
+```
+
+都加在这里。
+
+---
+
+# 📦 3️⃣ drivers/uart_manager.h
+
+新增文件
+
+```cpp
+#pragma once
+
+#include <Arduino.h>
+
+HardwareSerial& UARTManager_getUART1();
+
+HardwareSerial& UARTManager_getUART2();
+
+void UARTManager_beginUART1(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin);
+
+void UARTManager_beginUART2(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin);
+```
+
+---
+
+## 修改说明
+
+以后：
+
+```text
+S8
+ZE08
+```
+
+不再自己创建：
+
+```cpp
+HardwareSerial serial(...)
+```
+
+全部统一从这里获取。
+
+---
+
+# 📦 4️⃣ drivers/uart_manager.cpp
+
+新增文件
+
+```cpp
+#include "uart_manager.h"
+
+static HardwareSerial uart1(1);
+static HardwareSerial uart2(2);
+
+HardwareSerial& UARTManager_getUART1()
+{
+    return uart1;
+}
+
+HardwareSerial& UARTManager_getUART2()
+{
+    return uart2;
+}
+
+void UARTManager_beginUART1(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin)
+{
+    uart1.begin(
+        baudrate,
+        SERIAL_8N1,
+        rxPin,
+        txPin);
+}
+
+void UARTManager_beginUART2(
+    uint32_t baudrate,
+    int rxPin,
+    int txPin)
+{
+    uart2.begin(
+        baudrate,
+        SERIAL_8N1,
+        rxPin,
+        txPin);
+}
+```
+
+---
+
+## 修改说明
+
+以前：
+
+```cpp
+HardwareSerial s8Serial(1);
+HardwareSerial ze08Serial(2);
+```
+
+分别存在于：
+
+```text
+s8_sensor.cpp
+ze08_sensor.cpp
+```
+
+现在：
+
+```text
+drivers统一管理UART资源
+```
+
+---
+
+# 📦 5️⃣ sensors/htu21d_sensor.cpp
+
+修改前
+
+```cpp
+#include <Wire.h>
+#include <HTU21D.h>
+
+HTU21D htu;
+
+void HTU21D_begin()
+{
+    Wire.begin(21,22);
+
+    htu.begin();
+}
+```
+
+---
+
+修改后
+
+```cpp
+#include <HTU21D.h>
+
+#include "drivers/i2c_manager.h"
+
+HTU21D htu;
+
+void HTU21D_begin()
+{
+    I2CManager_begin(
+        21,
+        22);
+
+    htu.begin();
+}
+
+void HTU21D_read(
+    float* temperature,
+    float* humidity)
+{
+    *temperature =
+        htu.readTemperature();
+
+    *humidity =
+        htu.readHumidity();
+}
+```
+
+---
+
+## 修改说明
+
+删除：
+
+```cpp
+Wire.begin(...)
+```
+
+改为：
+
+```cpp
+I2CManager_begin(...)
+```
+
+实现：
+
+```text
+HTU21D不直接依赖Wire
+```
+
+---
+
+# 📦 6️⃣ sensors/ze08_sensor.cpp
+
+修改前
+
+```cpp
+HardwareSerial ze08Serial(2);
+
+void ZE08_begin()
+{
+    ze08Serial.begin(
+        9600,
+        SERIAL_8N1,
+        16,
+        17);
+}
+```
+
+---
+
+修改后
+
+```cpp
+#include "drivers/uart_manager.h"
+
+void ZE08_begin()
+{
+    UARTManager_beginUART2(
+        9600,
+        16,
+        17);
+}
+
+void ZE08_read(float* hcho)
+{
+    HardwareSerial& serial =
+        UARTManager_getUART2();
+
+    while (serial.available() >= 9)
+    {
+        uint8_t buf[9];
+
+        serial.readBytes(
+            buf,
+            9);
+
+        if (buf[0] == 0xFF)
+        {
+            uint16_t value =
+                ((uint16_t)buf[4] << 8)
+                | buf[5];
+
+            *hcho =
+                value / 1000.0f;
+        }
+    }
+}
+```
+
+---
+
+## 修改说明
+
+删除：
+
+```cpp
+HardwareSerial ze08Serial(2);
+```
+
+改成：
+
+```cpp
+UARTManager_getUART2()
+```
+
+---
+
+# 📦 7️⃣ sensors/s8_sensor.cpp
+
+修改前
+
+```cpp
+HardwareSerial s8Serial(1);
+```
+
+以及：
+
+```cpp
+s8Serial.begin(...)
+```
+
+---
+
+修改后
+
+```cpp
+#include "drivers/uart_manager.h"
+```
+
+---
+
+初始化
+
+```cpp
+void S8_begin()
+{
+    UARTManager_beginUART1(
+        9600,
+        4,
+        5);
+}
+```
+
+---
+
+读取
+
+```cpp
+void S8_read(int* co2ppm)
+{
+    HardwareSerial& serial =
+        UARTManager_getUART1();
+
+    uint8_t cmd[8] =
+    {
+        0xFE,0x04,0x00,0x03,
+        0x00,0x01,0x00,0x00
+    };
+
+    uint16_t crc =
+        modbusCRC(cmd,6);
+
+    cmd[6] = crc & 0xFF;
+    cmd[7] = crc >> 8;
+
+    while(serial.available())
+    {
+        serial.read();
+    }
+
+    serial.write(cmd,8);
+
+    delay(120);
+
+    if(serial.available() >= 7)
+    {
+        uint8_t buf[7];
+
+        serial.readBytes(
+            buf,
+            7);
+
+        *co2ppm =
+            ((uint16_t)buf[3] << 8)
+            | buf[4];
+    }
+    else
+    {
+        *co2ppm = -1;
+    }
+}
+```
+
+---
+
+## 修改说明
+
+删除：
+
+```cpp
+HardwareSerial s8Serial(1);
+```
+
+改为：
+
+```cpp
+UARTManager_getUART1()
+```
+
+---
+
+# Driver层完成后的效果
+
+当前分层关系变成：
+
+```text
+main
+ ↓
+
+sensor_manager
+ ↓
+
+htu21d_sensor
+ze08_sensor
+s8_sensor
+
+ ↓
+
+i2c_manager
+uart_manager
+
+ ↓
+
+Wire
+HardwareSerial
+```
+
+这就是 Driver Layer 第一阶段完成后的样子。
+
+此时：
+
+* 没有增加任何功能
+* 没有改变任何通信逻辑
+* 没有增加CRC校验
+* 没有增加timeout
+* 没有增加扫描功能
+
+只是完成了：
+
+```text
+传感器层
+    ↓
+驱动层
+    ↓
+硬件接口
+```
+
+的依赖分离。
+
+下一步如果继续优化 Driver Layer，我们再考虑：
+
+```text
+i2c_manager
+├── I2C扫描
+├── 设备检测
+└── 总线恢复
+
+uart_manager
+├── 超时读取
+├── 帧读取
+├── 缓冲区管理
+└── 串口状态检测
+```
+
+而不是直接进入 Sensor Layer。
