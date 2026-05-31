@@ -41,3 +41,29 @@ void SerialReporter_setDebug(bool enable)
 {
     debugEnabled = enable;
 }
+
+void SerialReporter_printHuman()
+{
+    if(!debugEnabled)
+        return;
+
+    char buffer[256];
+
+    OutputFormatter_toHuman(buffer, sizeof(buffer));
+
+    Serial.println("\n====================");
+    Serial.print(buffer);
+    Serial.println("====================");
+}
+
+void SerialReporter_printJSON()
+{
+    if(!debugEnabled)
+        return;
+
+    char buffer[256];
+
+    OutputFormatter_toJSON(buffer, sizeof(buffer));
+
+    Serial.println(buffer);
+}
