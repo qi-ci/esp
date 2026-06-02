@@ -1,21 +1,48 @@
-#include <Arduino.h>
-#include "system_state.h"
+// #include <Arduino.h>
+// #include "system_state.h"
 
+// SystemState g_systemState =
+// {
+//     .temperature = NAN,
+//     .humidity = NAN,
+
+//     .hcho = NAN,
+//     .co2 = -1,
+
+//     .airQuality = "未知",
+
+//     .htuReady = false,
+//     .ze08Ready = false,
+//     .s8Ready = false,
+
+//     .errorCount = 0,
+
+//     .bootCount = 1
+
+//     .timestamp = 0,
+//     .sampleInterval = 5000
+// };
+
+#include "system_state.h"
+#include <math.h>
+
+// ======================
+// 全局状态初始化
+// ======================
 SystemState g_systemState =
 {
-    .temperature = NAN,
-    .humidity = NAN,
+    "", "", false, "", // WiFi配置
 
-    .hcho = NAN,
-    .co2 = -1,
+    NAN, NAN,
+    -1, -1,
 
-    .airQuality = "未知",
+    0,
+    0,
 
-    .htuReady = false,
-    .ze08Ready = false,
-    .s8Ready = false,
+    false, false, false,
+    false, false,
 
-    .errorCount = 0,
+    "booting",
 
-    .bootCount = 1
+    5000,5000,5000,
 };

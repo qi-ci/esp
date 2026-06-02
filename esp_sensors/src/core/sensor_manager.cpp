@@ -28,123 +28,131 @@
 //     S8_read(&co2ppm);
 // }
 
-#include <Arduino.h>
-
 #include "sensor_manager.h"
 #include "system_state.h"
 
+// ======================
+// Sensors
+// ======================
 #include "../sensors/htu21d_sensor.h"
 #include "../sensors/ze08_sensor.h"
 #include "../sensors/s8_sensor.h"
 
-#include "../processing/filter.h"
+// ======================
+// Processing
+// ======================
 #include "../processing/data_validator.h"
-#include "../processing/air_quality.h"
+#include "../processing/filter.h"
 
+// ======================
+// Arduino
+// ======================
+#include <Arduino.h>
 
+// ======================
 // EMA状态
+// ======================
 
-static float tempFilterState = NAN;
-static float humFilterState = NAN;
-static float hchoFilterState = NAN;
-static float co2FilterState = NAN;
+static float g_tempEMA = NAN;
+static float g_humiEMA = NAN;
+static float g_hchoEMA = NAN;
+static float g_co2EMA  = NAN;
 
+// ======================
 // 定时器
+// ======================
 
-static uint32_t lastSampleTime = 0;
+static uint32_t lastHTURead  = 0;
+static uint32_t lastZE08Read = 0;
+static uint32_t lastS8Read   = 0;
 
-static const uint32_t SAMPLE_INTERVAL = 5000;
-
-// ============================
-
+// ======================
+// 初始化
+// ======================
 void SensorManager_begin()
-{ 
+{
     HTU21D_begin();
     ZE08_begin();
     S8_begin();
 
-    g_systemState.htuReady =
-        HTU21D_isReady();
-
-    g_systemState.ze08Ready =
-        ZE08_isReady();
-
-    g_systemState.s8Ready =
-        S8_isReady();
+    // 初始化全局状态
+    g_systemState.deviceStatus = "running";
 }
 
-// ============================
-
+// ======================
+// 主更新函数
+// ======================
 void SensorManager_update()
 {
-    if(millis() - lastSampleTime
-        < SAMPLE_INTERVAL)
+    uint32_t now = millis();
+
+    // ======================
+    // 1. HTU21D
+    // ======================
+    if (now - lastHTURead >= g_systemState.htuInterval)
     {
-        return;
-    }
+        lastHTURead = now;
 
-    lastSampleTime = millis();
+        float temp;
+        float humi;
 
-    float temp;
-    float hum;
+        HTU21D_read(&temp, &humi);
 
-    float hcho;
-
-    int co2;
-
-    // HTU21D
-
-    if(HTU21D_read(&temp,&hum))
-    {
-        if(Validator_temperature(temp))
+        if (Validator_temperature(temp))
         {
             g_systemState.temperature =
-                Filter_applyEMA(
-                    temp,
-                    &tempFilterState,
-                    0.3f);
+                Filter_applyEMA(temp, &g_tempEMA, 0.2f);
+
         }
 
-        if(Validator_humidity(hum))
+        if (Validator_humidity(humi))
         {
             g_systemState.humidity =
-                Filter_applyEMA(
-                    hum,
-                    &humFilterState,
-                    0.3f);
+                Filter_applyEMA(humi, &g_humiEMA, 0.2f);
         }
     }
 
-    // ZE08
-
-    if(ZE08_read(&hcho))
+    // ======================
+    // 2. ZE08（甲醛）
+    // ======================
+    if (now - lastZE08Read >= g_systemState.ze08Interval)
     {
-        if(Validator_hcho(hcho))
+        lastZE08Read = now;
+
+        float hcho;
+
+        ZE08_read(&hcho);
+
+        if (Validator_hcho(hcho))
         {
             g_systemState.hcho =
-                Filter_applyEMA(
-                    hcho,
-                    &hchoFilterState,
-                    0.2f);
+                Filter_applyEMA(hcho, &g_hchoEMA, 0.3f);
         }
     }
 
-    // S8
-
-    if(S8_read(&co2))
+    // ======================
+    // 3. S8（CO2）
+    // ======================
+    if (now - lastS8Read >= g_systemState.s8Interval)
     {
-        if(Validator_co2(co2))
+        lastS8Read = now;
+
+        int co2;
+
+        S8_read(&co2);
+
+        if (Validator_co2(co2))
         {
+            float co2_f = (float)co2;
+
             g_systemState.co2 =
-                (int)Filter_applyEMA(
-                    (float)co2,
-                    &co2FilterState,
-                    0.2f);
+                (int)Filter_applyEMA(co2_f, &g_co2EMA, 0.2f);
         }
     }
 
-    g_systemState.airQuality =
-        AirQuality_getLevel(
-            g_systemState.co2,
-            g_systemState.hcho);
+    // ======================
+    // 4. 时间戳
+    // ======================
+    g_systemState.timestamp = now;
+    g_systemState.lastUpdateTime = now;
 }

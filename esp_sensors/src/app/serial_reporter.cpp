@@ -30,40 +30,52 @@
 //     Serial.println("==============================");
 // }
 
-#include <Arduino.h>
+// #include <Arduino.h>
+
+// #include "serial_reporter.h"
+// #include "output_formatter.h"
+
+// static bool debugEnabled = true;
+
+// void SerialReporter_setDebug(bool enable)
+// {
+//     debugEnabled = enable;
+// }
+
+//void SerialReporter_printHuman()
+// {
+//     if(!debugEnabled)
+//         return;
+
+//     char buffer[256];
+
+//     OutputFormatter_toHuman(buffer, sizeof(buffer));
+
+//     Serial.println("\n====================");
+//     Serial.print(buffer);
+//     Serial.println("====================");
+// }
+
+// void SerialReporter_printJSON()
+// {
+//     if(!debugEnabled)
+//         return;
+
+//     char buffer[256];
+
+//     OutputFormatter_toJSON(buffer, sizeof(buffer));
+
+//     Serial.println(buffer);
+// }
+
 
 #include "serial_reporter.h"
 #include "output_formatter.h"
+#include "../core/system_state.h"  // 引入全局 g_systemState
+#include <Arduino.h>
 
-static bool debugEnabled = true;
-
-void SerialReporter_setDebug(bool enable)
+void SerialReporter_print()
 {
-    debugEnabled = enable;
-}
-
-void SerialReporter_printHuman()
-{
-    if(!debugEnabled)
-        return;
-
-    char buffer[256];
-
-    OutputFormatter_toHuman(buffer, sizeof(buffer));
-
-    Serial.println("\n====================");
-    Serial.print(buffer);
-    Serial.println("====================");
-}
-
-void SerialReporter_printJSON()
-{
-    if(!debugEnabled)
-        return;
-
-    char buffer[256];
-
-    OutputFormatter_toJSON(buffer, sizeof(buffer));
-
-    Serial.println(buffer);
+    // 直接使用全局状态
+    Serial.println(OutputFormatter_buildDebug());
 }
