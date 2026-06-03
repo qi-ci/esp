@@ -126,6 +126,11 @@ void SystemHealth_update()
     g_healthy =
         sensorFailCount < SENSOR_FAIL_LIMIT &&
         mqttFailCount < MQTT_FAIL_LIMIT;
+
+    if(!g_healthy)
+    {
+        g_systemState.sensor_ok = false;
+    }
 }
 
 // ======================

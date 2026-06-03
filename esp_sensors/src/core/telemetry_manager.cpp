@@ -20,7 +20,7 @@ void TelemetryManager_update()
     // ======================
     // HTU21D上传
     // ======================
-    if (now - lastUploadHTU >= g_systemState.htuInterval)
+    if (now - lastUploadHTU >= g_systemState.htu_interval)
     {
         lastUploadHTU = now;
 
@@ -34,7 +34,7 @@ void TelemetryManager_update()
     // ======================
     // ZE08上传
     // ======================
-    if (now - lastUploadZE08 >= g_systemState.ze08Interval)
+    if (now - lastUploadZE08 >= g_systemState.ze08_interval)
     {
         lastUploadZE08 = now;
 
@@ -48,7 +48,7 @@ void TelemetryManager_update()
     // ======================
     // S8上传
     // ======================
-    if (now - lastUploadS8 >= g_systemState.s8Interval)
+    if (now - lastUploadS8 >= g_systemState.s8_interval)
     {
         lastUploadS8 = now;
 

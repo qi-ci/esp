@@ -31,7 +31,11 @@
 // ======================
 SystemState g_systemState =
 {
-    "", "", false, "", // WiFi配置
+    "", "", 
+    
+    false, 
+    
+    "", 
 
     NAN, NAN,
     -1, -1,

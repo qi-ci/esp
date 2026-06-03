@@ -60,12 +60,12 @@ void CommandHandler_handle(const String& jsonCmd)
             g_systemState.wifi_ssid = ssid;
             g_systemState.wifi_password = password;
 
-            bool ok = WiFiManager_connect(ssid, password);
+            WiFiManager_connect();
 
-            g_systemState.wifi_connected = ok;
+            bool ok = WiFiManager_testConnect();
 
             // ✅ 保存到 NVS
-            if(ok) WiFiStorage_saveWiFi(ssid, password);
+            if(true) WiFiStorage_saveWiFi();
 
             response = OutputFormatter_buildResponse(
                 ok ? "ok" : "fail",
@@ -110,26 +110,20 @@ void CommandHandler_handle(const String& jsonCmd)
 
         if (sensor == "htu")
         {
-            g_systemState.htuInterval = value;
-            WiFiStorage_saveIntervals(g_systemState.htuInterval,
-                                      g_systemState.ze08Interval,
-                                      g_systemState.s8Interval); // ✅ 持久化
+            g_systemState.htu_interval = value;
+            WiFiStorage_saveIntervals(); // ✅ 持久化
             response = OutputFormatter_buildResponse("ok", "htu interval updated");
         }
         else if (sensor == "ze08")
         {
-            g_systemState.ze08Interval = value;
-            WiFiStorage_saveIntervals(g_systemState.htuInterval,
-                                      g_systemState.ze08Interval,
-                                      g_systemState.s8Interval); // ✅ 持久化
+            g_systemState.ze08_interval = value;
+            WiFiStorage_saveIntervals(); // ✅ 持久化
             response = OutputFormatter_buildResponse("ok", "ze08 interval updated");
         }
         else if (sensor == "s8")
         {
-            g_systemState.s8Interval = value;
-            WiFiStorage_saveIntervals(g_systemState.htuInterval,
-                                      g_systemState.ze08Interval,
-                                      g_systemState.s8Interval); // ✅ 持久化
+            g_systemState.s8_interval = value;
+            WiFiStorage_saveIntervals(); // ✅ 持久化
             response = OutputFormatter_buildResponse("ok", "s8 interval updated");
         }
         else
@@ -143,14 +137,12 @@ void CommandHandler_handle(const String& jsonCmd)
     // ======================
     else if (cmd == "reset_interval")
     {
-        g_systemState.htuInterval  = 5000;
-        g_systemState.ze08Interval = 5000;
-        g_systemState.s8Interval   = 5000;
+        g_systemState.htu_interval  = 5000;
+        g_systemState.ze08_interval = 5000;
+        g_systemState.s8_interval   = 5000;
 
         // ✅ 持久化
-        WiFiStorage_saveIntervals(g_systemState.htuInterval,
-                                  g_systemState.ze08Interval,
-                                  g_systemState.s8Interval);
+        WiFiStorage_saveIntervals();
 
         response = OutputFormatter_buildResponse("ok", "interval reset");
     }

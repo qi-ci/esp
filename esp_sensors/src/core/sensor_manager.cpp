@@ -89,7 +89,7 @@ void SensorManager_update()
     // ======================
     // 1. HTU21D
     // ======================
-    if (now - lastHTURead >= g_systemState.htuInterval)
+    if (now - lastHTURead >= g_systemState.htu_interval)
     {
         lastHTURead = now;
 
@@ -115,7 +115,7 @@ void SensorManager_update()
     // ======================
     // 2. ZE08（甲醛）
     // ======================
-    if (now - lastZE08Read >= g_systemState.ze08Interval)
+    if (now - lastZE08Read >= g_systemState.ze08_interval)
     {
         lastZE08Read = now;
 
@@ -133,7 +133,7 @@ void SensorManager_update()
     // ======================
     // 3. S8（CO2）
     // ======================
-    if (now - lastS8Read >= g_systemState.s8Interval)
+    if (now - lastS8Read >= g_systemState.s8_interval)
     {
         lastS8Read = now;
 

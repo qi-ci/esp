@@ -3,6 +3,7 @@
 #include "mqtt_client.h"
 #include "mqtt_topics.h"
 #include "../drivers/wifi_manager.h"
+#include "../core/system_state.h"
 
 // ======================
 // 重连控制参数
@@ -26,6 +27,7 @@ void MQTTReconnect_begin()
 static bool reconnect()
 {
     if(!WiFiManager_isConnected())
+        g_systemState.mqtt_connected = false;
         return false;
 
     bool ok = MQTT_connect();
@@ -37,11 +39,11 @@ static bool reconnect()
         // ======================
         MQTT_subscribe(MQTTTopic_cmd().c_str());
 
-        g_online = true;
+        g_systemState.mqtt_connected = true;
     }
     else
     {
-        g_online = false;
+        g_systemState.mqtt_connected = false;
     }
 
     return ok;
@@ -57,14 +59,14 @@ void MQTTReconnect_update()
     // WiFi不在线，MQTT直接失败
     if(!WiFiManager_isConnected())
     {
-        g_online = false;
+        g_systemState.mqtt_connected = false;
         return;
     }
 
     // MQTT正常
     if(MQTT_isConnected())
     {
-        g_online = true;
+        g_systemState.mqtt_connected = true;
         return;
     }
 
@@ -83,7 +85,7 @@ void MQTTReconnect_update()
 // ======================
 bool MQTTReconnect_isOnline()
 {
-    return g_online;
+     return g_systemState.mqtt_connected;
 }
 
 // ======================

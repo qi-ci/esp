@@ -47,10 +47,14 @@
 // ======================
 struct SystemState
 {
-    //新增保存 WiFi 配置
+    // ---- WiFi ----
     String wifi_ssid;
     String wifi_password;
-    bool wifi_connected;
+
+    // WiFi 测试结果（AP 配网专用）
+    bool wifi_test_result;   // true=测试成功 false=失败中
+
+    // ---- 设备ID ----
     String device_id;
 
     // ---- 传感器数据 ----
@@ -68,16 +72,16 @@ struct SystemState
     bool ze08Ready;
     bool s8Ready;
 
+    // ---- 核心状态统一 ----
     bool mqtt_connected;
     bool sensor_ok;
     
-
-    const char* deviceStatus;  // running / booting / error / degraded
+    const char* deviceStatus;  // running / booting / error
 
     // ---- 采样间隔(ms) ----
-    uint32_t htuInterval;
-    uint32_t ze08Interval;
-    uint32_t s8Interval;
+    uint32_t htu_interval;
+    uint32_t ze08_interval;
+    uint32_t s8_interval;
 };
 
 extern SystemState g_systemState;

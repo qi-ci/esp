@@ -1,69 +1,113 @@
 #include "wifi_storage.h"
 #include <Preferences.h>
-
-static Preferences prefs;
+#include "../core/system_state.h"
 
 // ======================
-// 初始化
+// WiFi保存
 // ======================
-void WiFiStorage_begin()
+void WiFiStorage_saveWiFi()
 {
-    prefs.begin("esp_config", false); // namespace "esp_config", RW模式
+    Preferences prefs;
+    prefs.begin("esp_config", false);   // 每次打开
+
+    prefs.putString("wifi_ssid", g_systemState.wifi_ssid);
+    prefs.putString("wifi_pass", g_systemState.wifi_password);
+
+    prefs.end(); // ✔ 立即释放NVS句柄
 }
 
 // ======================
-// WiFi保存与读取
+// WiFi读取
 // ======================
-void WiFiStorage_saveWiFi(const String& ssid, const String& password)
+bool WiFiStorage_loadWiFi()
 {
-    prefs.putString("wifi_ssid", ssid);
-    prefs.putString("wifi_pass", password);
-}
+    Preferences prefs;
+    prefs.begin("esp_config", true);   // 只读模式
 
-bool WiFiStorage_loadWiFi(String& ssid, String& password)
-{
     if (!prefs.isKey("wifi_ssid") || !prefs.isKey("wifi_pass"))
+    {
+        prefs.end();
         return false;
+    }
 
-    ssid = prefs.getString("wifi_ssid", "");
-    password = prefs.getString("wifi_pass", "");
+    g_systemState.wifi_ssid = prefs.getString("wifi_ssid", "");
+    g_systemState.wifi_password = prefs.getString("wifi_pass", "");
+
+    prefs.end(); // ✔ 立即释放
+
     return true;
 }
 
 // ======================
-// Device ID保存与读取
+// Device ID保存
 // ======================
-void WiFiStorage_saveDeviceID(const String& device_id)
+void WiFiStorage_saveDeviceID()
 {
-    prefs.putString("device_id", device_id);
+    Preferences prefs;
+    prefs.begin("esp_config", false);
+
+    prefs.putString("device_id", g_systemState.device_id);
+
+    prefs.end();
 }
 
-bool WiFiStorage_loadDeviceID(String& device_id)
+// ======================
+// Device ID读取
+// ======================
+bool WiFiStorage_loadDeviceID()
 {
+    Preferences prefs;
+    prefs.begin("esp_config", true);
+
     if (!prefs.isKey("device_id"))
+    {
+        prefs.end();
         return false;
+    }
 
-    device_id = prefs.getString("device_id", "");
+    g_systemState.device_id = prefs.getString("device_id", "");
+
+    prefs.end();
+
     return true;
 }
 
 // ======================
-// 传感器采样周期保存与读取
+// 采样间隔保存
 // ======================
-void WiFiStorage_saveIntervals(uint32_t htu, uint32_t ze08, uint32_t s8)
+void WiFiStorage_saveIntervals()
 {
-    prefs.putUInt("htu_interval", htu);
-    prefs.putUInt("ze08_interval", ze08);
-    prefs.putUInt("s8_interval", s8);
+    Preferences prefs;
+    prefs.begin("esp_config", false);
+
+    prefs.putUInt("htu_interval", g_systemState.htu_interval);
+    prefs.putUInt("ze08_interval", g_systemState.ze08_interval);
+    prefs.putUInt("s8_interval", g_systemState.s8_interval);
+
+    prefs.end();
 }
 
-bool WiFiStorage_loadIntervals(uint32_t& htu, uint32_t& ze08, uint32_t& s8)
+// ======================
+// 采样间隔读取
+// ======================
+bool WiFiStorage_loadIntervals()
 {
-    if (!prefs.isKey("htu_interval") || !prefs.isKey("ze08_interval") || !prefs.isKey("s8_interval"))
-        return false;
+    Preferences prefs;
+    prefs.begin("esp_config", true);
 
-    htu   = prefs.getUInt("htu_interval", 5000);
-    ze08  = prefs.getUInt("ze08_interval", 5000);
-    s8    = prefs.getUInt("s8_interval", 5000);
+    if (!prefs.isKey("htu_interval") ||
+        !prefs.isKey("ze08_interval") ||
+        !prefs.isKey("s8_interval"))
+    {
+        prefs.end();
+        return false;
+    }
+
+    g_systemState.htu_interval  = prefs.getUInt("htu_interval", 5000);
+    g_systemState.ze08_interval = prefs.getUInt("ze08_interval", 5000);
+    g_systemState.s8_interval   = prefs.getUInt("s8_interval", 5000);
+
+    prefs.end();
+
     return true;
 }
