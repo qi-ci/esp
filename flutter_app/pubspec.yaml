@@ -1,0 +1,84 @@
+name: flutter_env_monitor
+description: ESP32 环境监测仪 Flutter App - 实时监控温湿度、CO2、HCHO
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.12.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状态管理
+  provider: ^6.0.7
+
+  # UI 样式
+  flutter_lints: ^6.0.0
+  cupertino_icons: ^1.0.5
+  intl: ^0.20.2
+
+  # 图表绘制
+  fl_chart: ^1.2.0
+
+  # MQTT 通信
+  mqtt_client: ^10.0.0
+
+  # 本地存储
+  sqflite: ^2.5.9
+  path_provider: ^2.0.17
+  path: ^1.8.3
+  shared_preferences: ^2.2.2
+
+  # 本地通知
+  flutter_local_notifications: ^21.0.0
+
+  # 权限
+  permission_handler: ^12.0.3
+
+  # GPS定位
+  geolocator: ^14.0.2
+  geocoding: ^5.0.0
+
+  # 针对不同平台的MQTT和定位适配
+  mqtt_client_platform_interface: ^2.0.1
+
+  # Flutter 国际化
+  flutter_localizations:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # 代码检查
+  lints: ^6.1.0
+
+flutter:
+  uses-material-design: true
+
+  # 资源文件
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/lottie/   # 如果有动效文件
+    - assets/fonts/
+
+  # 字体
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+        - asset: assets/fonts/NotoSans-Bold.ttf
+          weight: 700
+
+  # 国际化支持
+  # l10n: 自动生成 AppLocalizations
+  # l10n.yaml 在根目录可定义/
+  generate: true

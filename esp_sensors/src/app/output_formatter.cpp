@@ -47,7 +47,7 @@ String OutputFormatter_buildTelemetry(const SystemState& s, const String& sensor
     j += ",\"humi\":" + String(s.humidity);
     j += ",\"co2\":" + String(s.co2);
     j += ",\"hcho\":" + String(s.hcho);
-    j += ",\"time\":" + String(s.timestamp) + "\"";
+    j += ",\"time\":" + String(s.timestamp);
     j += "}";
     return j;
 }
@@ -66,8 +66,8 @@ String OutputFormatter_buildDebug()
 {
     String t;
     t += "\n=== DEVICE STATUS ===\n";
-    t += "Temp: " + String(g_systemState.temperature) + " C\n";
-    t += "Humi: " + String(g_systemState.humidity) + " %\n";
+    t += "Temp: " + String(g_systemState.temperature) + " °C\n";
+    t += "Humi: " + String(g_systemState.humidity) + " %RH\n";
     t += "CO2 : " + String(g_systemState.co2) + " ppm\n";
     t += "HCHO: " + String(g_systemState.hcho) + " mg/m3\n";
     t += "State: " + String(g_systemState.deviceStatus) + "\n";
