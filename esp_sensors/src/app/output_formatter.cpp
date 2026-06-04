@@ -39,15 +39,25 @@
 // ======================
 // MQTT Telemetry JSON
 // ======================
-String OutputFormatter_buildTelemetry(const SystemState& s, const String& sensorType)
+String OutputFormatter_buildTelemetry(const String& sensorType, float value1, float value2, unsigned long timestamp)
 {
     String j = "{";
     j += "\"sensor\":\"" + sensorType + "\"";
-    j += ",\"temp\":" + String(s.temperature);
-    j += ",\"humi\":" + String(s.humidity);
-    j += ",\"co2\":" + String(s.co2);
-    j += ",\"hcho\":" + String(s.hcho);
-    j += ",\"time\":" + String(s.timestamp);
+    if(sensorType == "htu")
+    {
+        j += ",\"temp\":" + String(value1);
+        j += ",\"humi\":" + String(value2);
+    }
+    else if(sensorType == "ze08")
+    {
+        j += ",\"co2\":" + String(value1);
+    }
+    else if(sensorType == "s8")
+    {
+        j += ",\"hcho\":" + String(value1);
+    }
+
+    j += ",\"time\":" + String(timestamp);
     j += "}";
     return j;
 }
@@ -70,7 +80,10 @@ String OutputFormatter_buildDebug()
     t += "Humi: " + String(g_systemState.humidity) + " %RH\n";
     t += "CO2 : " + String(g_systemState.co2) + " ppm\n";
     t += "HCHO: " + String(g_systemState.hcho) + " mg/m3\n";
-    t += "State: " + String(g_systemState.deviceStatus) + "\n";
+    t += "Sensor OK: " + String(g_systemState.sensor_ok) + "\n";
+    t += "WiFi Connected: " + String(g_systemState.wifi_connected) + "\n";
+    t += "MQTT Connected: " + String(g_systemState.mqtt_connected) + "\n";
+    t += "\n=====================\n";
     return t;
 }
 

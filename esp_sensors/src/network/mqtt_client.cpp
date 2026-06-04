@@ -1,12 +1,11 @@
 #include "mqtt_client.h"
-#include "mqtt_topics.h"
+
+#include "../config/network_config.h"
+#include "../core/system_state.h"
 
 #include "../core/command_handler.h"
 
-#include "../config/network_config.h"
-
-#include "../app/output_formatter.h"
-#include "../core/system_state.h"
+#include "mqtt_topics.h"
 
 #include <WiFiClient.h>
 #include <PubSubClient.h>
@@ -17,14 +16,14 @@
 static WiFiClient wifiClient;
 static PubSubClient mqtt(wifiClient);
 
-static bool g_connected = false;
-
 // ======================
 // 初始化
 // ======================
 void MQTT_begin()
 {
     mqtt.setServer(MQTT_HOST, MQTT_PORT);
+    mqtt.setCallback(mqttCallback);
+    mqtt.setBufferSize(1024);
 }
 
 // ======================
@@ -32,7 +31,10 @@ void MQTT_begin()
 // ======================
 bool MQTT_connect()
 {
-    String clientId = "esp32_" + String((uint32_t)ESP.getEfuseMac(), HEX);
+    if(mqtt.connected())
+        return true;
+
+    String clientId = g_systemState.device_id;
 
     bool ok = mqtt.connect(
         clientId.c_str(),
@@ -40,8 +42,26 @@ bool MQTT_connect()
         MQTT_PASSWORD
     );
 
-    g_connected = ok;
+    if(ok)
+    {
+        Serial.println("[MQTT] Connected");
+        MQTT_subscribe(MQTTTopic_cmd());
+    }
+    else
+    {
+        Serial.printf("[MQTT] Connect Failed state=%d\n",mqtt.state());
+    }
+
     return ok;
+}
+
+void MQTT_disconnect()
+{
+    if(mqtt.connected())
+    {
+        mqtt.disconnect();
+        Serial.println("[MQTT] Disconnected");
+    }
 }
 
 // ======================
@@ -49,8 +69,10 @@ bool MQTT_connect()
 // ======================
 void MQTT_loop()
 {
-    if(mqtt.connected())
-        mqtt.loop();
+    if(!mqtt.connected())
+        return;
+    
+    mqtt.loop();
 }
 
 // ======================
@@ -61,21 +83,31 @@ bool MQTT_isConnected()
     return mqtt.connected();
 }
 
+int MQTT_lastError()
+{
+    return mqtt.state();
+}
+
 // ======================
 // publish
 // ======================
+bool MQTT_publish(const String& topic,const String& payload)
+{
+    if(!mqtt.connected())
+        Serial.println("[MQTT] Publish Failed");
+        return false;
+
+    return mqtt.publish(topic.c_str(),payload.c_str());
+}
+
 bool MQTT_publishTelemetry(const String& payload)
 {
-    if(!mqtt.connected()) return false;
-
-    return mqtt.publish(MQTTTopic_telemetry().c_str(), payload.c_str());
+    return MQTT_publish(MQTTTopic_telemetry(),payload);
 }
 
 bool MQTT_publishResponse(const String& payload)
 {
-    if(!mqtt.connected()) return false;
-
-    return mqtt.publish(MQTTTopic_resp().c_str(), payload.c_str());
+    return MQTT_publish(MQTTTopic_resp(),payload);
 }
 
 // ======================
@@ -91,26 +123,17 @@ bool MQTT_subscribe(const String& topic)
 static void mqttCallback(char* topic, byte* payload, unsigned int length)
 {
     String msg;
+    msg.reserve(length);
     for (unsigned int i = 0; i < length; i++)
     {
         msg += (char)payload[i];
     }
 
-    CommandHandler_handle(msg);
+    String topicStr(topic);
+
+    if(topicStr == MQTTTopic_cmd())
+    {
+        CommandHandler_handle(msg);
+    }
 }
 
-// ======================
-// 自动上传封装
-// ======================
-void MQTT_publishTelemetryAuto(const SystemState& state,const String& sensorType)
-{
-    if(!mqtt.connected())
-        return;
-
-    String payload = OutputFormatter_buildTelemetry(state, sensorType);
-
-    mqtt.publish(
-        MQTTTopic_telemetry().c_str(),
-        payload.c_str()
-    );
-}

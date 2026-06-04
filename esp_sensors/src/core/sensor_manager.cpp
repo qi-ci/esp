@@ -74,9 +74,6 @@ void SensorManager_begin()
     HTU21D_begin();
     ZE08_begin();
     S8_begin();
-
-    // 初始化全局状态
-    g_systemState.deviceStatus = "running";
 }
 
 // ======================
@@ -153,6 +150,91 @@ void SensorManager_update()
     // ======================
     // 4. 时间戳
     // ======================
+    g_systemState.timestamp = now;
+    g_systemState.lastUpdateTime = now;
+}
+
+void SensorManager_HTU21Dupdate()
+{
+    uint32_t now = millis();
+
+    // ======================
+    // HTU21D
+    // ======================
+    if (now - lastHTURead >= g_systemState.htu_interval)
+    {
+        lastHTURead = now;
+
+        float temp;
+        float humi;
+
+        HTU21D_read(&temp, &humi);
+
+        if (Validator_temperature(temp))
+        {
+            g_systemState.temperature =
+                Filter_applyEMA(temp, &g_tempEMA, 0.2f);
+
+        }
+
+        if (Validator_humidity(humi))
+        {
+            g_systemState.humidity =
+                Filter_applyEMA(humi, &g_humiEMA, 0.2f);
+        }
+    }
+    g_systemState.timestamp = now;
+    g_systemState.lastUpdateTime = now;
+}
+
+void SensorManager_ZE08update()
+{
+    uint32_t now = millis();
+
+    // ======================
+    // 2. ZE08（甲醛）
+    // ======================
+    if (now - lastZE08Read >= g_systemState.ze08_interval)
+    {
+        lastZE08Read = now;
+
+        float hcho;
+
+        ZE08_read(&hcho);
+
+        if (Validator_hcho(hcho))
+        {
+            g_systemState.hcho =
+                Filter_applyEMA(hcho, &g_hchoEMA, 0.3f);
+        }
+    }
+    g_systemState.timestamp = now;
+    g_systemState.lastUpdateTime = now;
+}
+
+void SensorManager_S8update()
+{
+    uint32_t now = millis();
+
+    // ======================
+    // 3. S8（CO2）
+    // ======================
+    if (now - lastS8Read >= g_systemState.s8_interval)
+    {
+        lastS8Read = now;
+
+        int co2;
+
+        S8_read(&co2);
+
+        if (Validator_co2(co2))
+        {
+            float co2_f = (float)co2;
+
+            g_systemState.co2 =
+                (int)Filter_applyEMA(co2_f, &g_co2EMA, 0.2f);
+        }
+    }
     g_systemState.timestamp = now;
     g_systemState.lastUpdateTime = now;
 }

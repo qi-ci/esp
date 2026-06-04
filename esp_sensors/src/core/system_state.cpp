@@ -35,7 +35,7 @@ SystemState g_systemState =
     
     false, 
     
-    "", 
+    "airmon_livingroom", 
 
     NAN, NAN,
     -1, -1,
@@ -44,7 +44,7 @@ SystemState g_systemState =
     0,
 
     false, false, false,
-    false, false,
+    false, false, false,
 
     "booting",
 

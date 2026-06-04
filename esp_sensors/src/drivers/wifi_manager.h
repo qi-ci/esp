@@ -1,15 +1,11 @@
 #pragma once
 #include <Arduino.h>
 
-void WiFiManager_begin();
-
 void WiFiManager_connect();
-
-bool WiFiManager_update();
 
 bool WiFiManager_isConnected();
 
-void WiFiManager_disconnect();
+void WiFiManager_reconfig();
 
 
 // -----------------------------

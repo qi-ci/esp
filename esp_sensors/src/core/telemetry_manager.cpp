@@ -1,4 +1,7 @@
 #include "telemetry_manager.h"
+
+#include "../core/system_state.h"
+
 #include "../app/output_formatter.h"
 #include "../network/mqtt_client.h"
 #include <Arduino.h>
@@ -19,13 +22,18 @@ void TelemetryManager_update()
 
     // ======================
     // HTU21D上传
-    // ======================
     if (now - lastUploadHTU >= g_systemState.htu_interval)
     {
         lastUploadHTU = now;
 
-        String payload = OutputFormatter_buildTelemetry(g_systemState, "htu"); // 增加 sensor字段区分
-        if (MQTT_isConnected() && !MQTT_publishTelemetry(payload))
+        String payload = OutputFormatter_buildTelemetry(
+            "htu",
+            g_systemState.temperature,
+            g_systemState.humidity,
+            g_systemState.timestamp
+        );
+
+        if(MQTT_isConnected() && !MQTT_publishTelemetry(payload))
         {
             Serial.println("[TEL] HTU telemetry publish failed");
         }
@@ -33,13 +41,18 @@ void TelemetryManager_update()
 
     // ======================
     // ZE08上传
-    // ======================
     if (now - lastUploadZE08 >= g_systemState.ze08_interval)
     {
         lastUploadZE08 = now;
 
-        String payload = OutputFormatter_buildTelemetry(g_systemState, "ze08");
-        if (MQTT_isConnected() && !MQTT_publishTelemetry(payload))
+        String payload = OutputFormatter_buildTelemetry(
+            "ze08",
+            g_systemState.co2,
+            0,
+            g_systemState.timestamp
+        );
+
+        if(MQTT_isConnected() && !MQTT_publishTelemetry(payload))
         {
             Serial.println("[TEL] ZE08 telemetry publish failed");
         }
@@ -47,13 +60,18 @@ void TelemetryManager_update()
 
     // ======================
     // S8上传
-    // ======================
     if (now - lastUploadS8 >= g_systemState.s8_interval)
     {
         lastUploadS8 = now;
 
-        String payload = OutputFormatter_buildTelemetry(g_systemState, "s8");
-        if (MQTT_isConnected() && !MQTT_publishTelemetry(payload))
+        String payload = OutputFormatter_buildTelemetry(
+            "s8",
+            g_systemState.hcho,
+            0,
+            g_systemState.timestamp
+        );
+
+        if(MQTT_isConnected() && !MQTT_publishTelemetry(payload))
         {
             Serial.println("[TEL] S8 telemetry publish failed");
         }

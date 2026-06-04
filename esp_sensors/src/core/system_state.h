@@ -73,10 +73,10 @@ struct SystemState
     bool s8Ready;
 
     // ---- 核心状态统一 ----
-    bool mqtt_connected;
     bool sensor_ok;
-    
-    const char* deviceStatus;  // running / booting / error
+    bool wifi_connected;
+    bool mqtt_connected;
+    const char* deviceStatus;  // running / booting
 
     // ---- 采样间隔(ms) ----
     uint32_t htu_interval;

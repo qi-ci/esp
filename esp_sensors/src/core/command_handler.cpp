@@ -79,26 +79,41 @@ void CommandHandler_handle(const String& jsonCmd)
     // ======================
     else if (cmd == "get_all")
     {
+        SensorManager_update();
+        
         response = OutputFormatter_buildResponse(
             "ok",
-            "T=" + String(g_systemState.temperature) +
-            ",H=" + String(g_systemState.humidity) +
+            "Temp=" + String(g_systemState.temperature) +
+            ",Humi=" + String(g_systemState.humidity) +
             ",CO2=" + String(g_systemState.co2) +
-            ",HCHO=" + String(g_systemState.hcho)
+            ",HCHO=" + String(g_systemState.hcho) +
+            ",State=" + String(g_systemState.deviceStatus)
         );
     }
 
     // ======================
     // 2. 单传感器查询
     // ======================
-    else if (cmd == "get_temp")
-        response = OutputFormatter_buildResponse("ok", String(g_systemState.temperature));
-    else if (cmd == "get_humi")
-        response = OutputFormatter_buildResponse("ok", String(g_systemState.humidity));
-    else if (cmd == "get_co2")
-        response = OutputFormatter_buildResponse("ok", String(g_systemState.co2));
-    else if (cmd == "get_hcho")
-        response = OutputFormatter_buildResponse("ok", String(g_systemState.hcho));
+    else if (cmd == "get_htu21d")
+    {
+        SensorManager_HTU21Dupdate(); // 主动更新温湿度数据
+        response = OutputFormatter_buildResponse("ok",
+            "Temp=" + String(g_systemState.temperature) +",Humi=" + String(g_systemState.humidity));
+    }
+
+    else if (cmd == "get_ze08")
+    {
+        SensorManager_ZE08update(); // 主动更新甲醛数据
+        response = OutputFormatter_buildResponse("ok",
+            "HCHO=" + String(g_systemState.hcho));
+    }
+
+    else if (cmd == "get_s8")
+    {
+        SensorManager_S8update(); // 主动更新CO2数据
+        response = OutputFormatter_buildResponse("ok",
+            "CO2=" + String(g_systemState.co2));
+    }
 
     // ======================
     // 3. 设置采样周期

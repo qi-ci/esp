@@ -45,11 +45,6 @@ bool HTU21D_read(
     float t = htu.readTemperature();
     float h = htu.readHumidity();
 
-    if(isnan(t) || isnan(h))
-    {
-        return false;
-    }
-
     *temperature = t;
     *humidity = h;
 

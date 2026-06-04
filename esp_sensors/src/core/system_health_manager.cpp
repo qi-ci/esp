@@ -1,10 +1,11 @@
 #include "system_health_manager.h"
 
-#include "system_state.h"
-#include "sensor_manager.h"
+#include "../core/system_state.h"
 
-#include "../network/mqtt_reconnect_manager.h"
+#include "sensor_manager.h"
 #include "../drivers/wifi_manager.h"
+#include "../network/mqtt_client.h"
+#include "../processing/data_validator.h"
 
 // ======================
 // 健康状态
@@ -15,12 +16,14 @@ static bool g_healthy = true;
 // 异常计数器
 // ======================
 static uint32_t sensorFailCount = 0;
-static uint32_t mqttFailCount   = 0;
+static uint32_t wifiFailCount = 0;
+static uint32_t mqttFailCount = 0; 
 
 // ======================
 // 配置阈值
 // ======================
 static const uint8_t SENSOR_FAIL_LIMIT = 5;
+static const uint8_t WIFI_FAIL_LIMIT   = 5;
 static const uint8_t MQTT_FAIL_LIMIT   = 5;
 
 // ======================
@@ -28,8 +31,8 @@ static const uint8_t MQTT_FAIL_LIMIT   = 5;
 // ======================
 void SystemHealth_begin()
 {
-    g_healthy = true;
     sensorFailCount = 0;
+    wifiFailCount = 0;
     mqttFailCount = 0;
 }
 
@@ -65,11 +68,39 @@ static void checkSensors()
 }
 
 // ======================
+// 检查WiFi状态
+// ======================
+static void checkWifi()
+{
+    bool ok = WiFiManager_isConnected();
+
+    if(!ok)
+    {
+        wifiFailCount++;
+    }
+    else
+    {
+        wifiFailCount = 0;
+    }
+
+    // ======================
+    // WiFi恢复策略
+    // ======================
+    if(wifiFailCount >= WIFI_FAIL_LIMIT)
+    {
+        Serial.println("[HEALTH] wifi force reconnect");
+
+        WiFiManager_reconfig();
+        wifiFailCount = 0;
+    }
+}
+
+// ======================
 // 检查MQTT状态
 // ======================
 static void checkMQTT()
 {
-    bool ok = MQTTReconnect_isOnline();
+    bool ok = MQTT_isConnected();
 
     if(!ok)
     {
@@ -87,7 +118,7 @@ static void checkMQTT()
     {
         Serial.println("[HEALTH] mqtt force reconnect");
 
-        MQTTReconnect_forceReconnect();
+        MQTT_connect();
         mqttFailCount = 0;
     }
 }
@@ -98,10 +129,10 @@ static void checkMQTT()
 static void checkData()
 {
     if(
-        isnan(g_systemState.temperature) ||
-        isnan(g_systemState.humidity) ||
-        isnan(g_systemState.co2) ||
-        isnan(g_systemState.hcho)
+        Validator_temperature(g_systemState.temperature) ||
+        Validator_humidity(g_systemState.humidity) ||
+        Validator_co2(g_systemState.co2) ||
+        Validator_hcho(g_systemState.hcho)
     )
     {
         Serial.println("[HEALTH] invalid sensor data detected");
@@ -117,7 +148,7 @@ static void checkData()
 void SystemHealth_update()
 {
     checkSensors();
-    checkMQTT();
+    checkWifi();
     checkData();
 
     // ======================
@@ -125,11 +156,14 @@ void SystemHealth_update()
     // ======================
     g_healthy =
         sensorFailCount < SENSOR_FAIL_LIMIT &&
-        mqttFailCount < MQTT_FAIL_LIMIT;
+        wifiFailCount < WIFI_FAIL_LIMIT;
 
-    if(!g_healthy)
+    if(g_healthy)
     {
-        g_systemState.sensor_ok = false;
+        g_systemState.sensor_ok = true;
+        g_systemState.wifi_connected = true;
+        g_systemState.mqtt_connected = true;
+        g_systemState.deviceStatus = "running";
     }
 }
 

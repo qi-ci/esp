@@ -38,39 +38,6 @@ bool WiFiStorage_loadWiFi()
     return true;
 }
 
-// ======================
-// Device ID保存
-// ======================
-void WiFiStorage_saveDeviceID()
-{
-    Preferences prefs;
-    prefs.begin("esp_config", false);
-
-    prefs.putString("device_id", g_systemState.device_id);
-
-    prefs.end();
-}
-
-// ======================
-// Device ID读取
-// ======================
-bool WiFiStorage_loadDeviceID()
-{
-    Preferences prefs;
-    prefs.begin("esp_config", true);
-
-    if (!prefs.isKey("device_id"))
-    {
-        prefs.end();
-        return false;
-    }
-
-    g_systemState.device_id = prefs.getString("device_id", "");
-
-    prefs.end();
-
-    return true;
-}
 
 // ======================
 // 采样间隔保存

@@ -17,6 +17,8 @@ void handleRoot() {
         // =========================
         // 1️⃣ 进入测试模式（关键）
         // =========================
+        g_systemState.wifi_ssid = ssid;
+        g_systemState.wifi_password = password;
         bool ok = WiFiManager_testConnect();
 
         g_systemState.wifi_test_result = ok; // 保存测试结果到全局状态
@@ -27,9 +29,6 @@ void handleRoot() {
             // 2️⃣ 仅成功才保存
             // =========================
             WiFiStorage_saveWiFi();
-
-            // 同时保存 g_systemState.device_id（可保持不变）
-            WiFiStorage_saveDeviceID();            
 
             String html = "<h1>Saved! Device ID: " + g_systemState.device_id + "</h1>"
                         "<p>Rebooting...</p>";
@@ -61,8 +60,7 @@ void handleRoot() {
 void WiFiAPServer_begin() {
     server.on("/", handleRoot);
     server.begin();
-    Serial.print("Web server started at 192.168.4.1, Device ID: ");
-    Serial.println(g_systemState.device_id);
+    Serial.print("Web server started at 192.168.4.1");
 }
 
 void WiFiAPServer_loop() {
