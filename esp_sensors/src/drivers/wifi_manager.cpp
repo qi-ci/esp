@@ -15,9 +15,9 @@ void WiFiManager_connect()
     WiFi.disconnect(true);
     delay(100); // 小延迟，保证断开
 
-    WiFi.mode(WIFI_STA);//声明当前为基站(Station)模式
     if (g_systemState.wifi_ssid.length() != 0)
     {
+        WiFi.mode(WIFI_STA);//声明当前为基站(Station)模式
         WiFi.begin(g_systemState.wifi_ssid.c_str(), g_systemState.wifi_password.c_str());
     }
     else
@@ -50,12 +50,18 @@ void WiFiManager_WifiUpdate()
 // ==============================
 void WiFiManager_beginAPMode()
 {
-    WiFi.mode(WIFI_AP_STA);
-    const char* ap_ssid = "ESP32_Setup";
-    const char* ap_password = "12345678";
-    WiFi.softAP(ap_ssid, ap_password);
+    WiFi.mode(WIFI_AP);                     // AP + STA 模式
+
+    IPAddress local_ip(192,168,5,1);
+    IPAddress gateway(192,168,5,1);
+    IPAddress subnet(255,255,255,0);
+    WiFi.softAPConfig(local_ip, gateway, subnet);
+    
+    WiFi.softAP("ESP32_Setup", "12345678");    // 启动AP
     Serial.println("AP Mode started. Connect to WiFi 'ESP32_Setup' and configure network.");
+    Serial.print("AP SERVER: "); Serial.println(WiFi.softAPIP());
 }
+
 // ==============================
 // AP 配网
 // ==============================
@@ -64,6 +70,8 @@ void WiFiManager_NetAPModeConfig()
     WiFiManager_beginAPMode();
     
     WiFiAPServer_begin(); // 启动内置 Web 配置服务器
+
+    
 }
 
 // ==============================

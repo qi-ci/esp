@@ -39,5 +39,4 @@ void App_init()
 void App_loop()
 {
     Scheduler_update();
-    MQTT_loop();
 }

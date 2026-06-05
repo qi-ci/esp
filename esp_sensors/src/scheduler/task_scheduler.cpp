@@ -1,7 +1,14 @@
 #include "task_scheduler.h"
+
 #include "../core/sensor_manager.h"
 #include "../core/system_health_manager.h"
+
+#include "../drivers/wifi_manager.h"
+#include "../network/wifi_ap_server.h"
+#include "../network/mqtt_client.h"
+
 #include "../core/system_state.h"
+
 #include "../app/serial_reporter.h"
 #include "../core/telemetry_manager.h"
 
@@ -18,11 +25,14 @@ static uint32_t lastTelemetry  = 0;
 static uint32_t lastHealth     = 0;
 static uint32_t lastSerial     = 0;
 
+static uint32_t lastAlive = 0;
+
 // =====================
 // 默认间隔（毫秒）
 // =====================
 static const uint32_t HEALTH_INTERVAL  = 2000;  // 健康检查 2s
 static const uint32_t SERIAL_INTERVAL  = 2000;  // 串口输出 2s
+const uint32_t ALIVE_INTERVAL = 50; // ms
 
 void Scheduler_begin()
 {
@@ -86,5 +96,15 @@ void Scheduler_update()
     {
         lastSerial += SERIAL_INTERVAL;
         SerialReporter_print();
+    }
+
+    // AP server 和 MQTT保活
+    if(now - lastAlive >= ALIVE_INTERVAL)
+    {
+        lastAlive = now;
+        if(WiFiManager_isConnected())
+            MQTT_loop();  //MQTT保活
+        else
+            WiFiAPServer_loop();  //必须一直快速轮询
     }
 }
