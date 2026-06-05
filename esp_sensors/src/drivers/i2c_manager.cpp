@@ -3,7 +3,7 @@
 static uint8_t g_sdaPin;
 static uint8_t g_sclPin;
 
-void I2CManager_begin(
+void I2CManager_beginI2C1(
     uint8_t sdaPin,
     uint8_t sclPin)
 {

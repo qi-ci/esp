@@ -80,9 +80,22 @@ String OutputFormatter_buildDebug()
     t += "Humi: " + String(g_systemState.humidity) + " %RH\n";
     t += "CO2 : " + String(g_systemState.co2) + " ppm\n";
     t += "HCHO: " + String(g_systemState.hcho) + " mg/m3\n";
-    t += "Sensor OK: " + String(g_systemState.sensor_ok) + "\n";
-    t += "WiFi Connected: " + String(g_systemState.wifi_connected) + "\n";
-    t += "MQTT Connected: " + String(g_systemState.mqtt_connected) + "\n";
+    
+    t += "Sensor OK: ";
+    t += g_systemState.sensor_ok ? "YES" : "NO";
+    t += "\n";
+
+    t += "WiFi Connected: ";
+    t += g_systemState.wifi_connected ? "YES" : "NO";
+    t += "\n";
+
+    t += "MQTT Connected: ";
+    t += g_systemState.mqtt_connected ? "YES" : "NO";
+    t += "\n";
+
+    t += "System OK: ";
+    t += g_systemState.System_OK ? "YES" : "NO";
+
     t += "\n=====================\n";
     return t;
 }

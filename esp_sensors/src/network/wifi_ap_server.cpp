@@ -60,7 +60,7 @@ void handleRoot() {
 void WiFiAPServer_begin() {
     server.on("/", handleRoot);
     server.begin();
-    Serial.print("Web server started at 192.168.4.1");
+    Serial.println("Web server started at 192.168.4.1");
 }
 
 void WiFiAPServer_loop() {

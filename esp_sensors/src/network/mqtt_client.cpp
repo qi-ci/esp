@@ -3,6 +3,8 @@
 #include "../config/network_config.h"
 #include "../core/system_state.h"
 
+#include "../drivers/wifi_manager.h"
+
 #include "../core/command_handler.h"
 
 #include "mqtt_topics.h"
@@ -17,13 +19,40 @@ static WiFiClient wifiClient;
 static PubSubClient mqtt(wifiClient);
 
 // ======================
+// subscribe（只提供接口）
+// ======================
+bool MQTT_subscribe(const String& topic)
+{
+    if(!mqtt.connected()) return false;
+
+    return mqtt.subscribe(topic.c_str());
+}
+
+static void mqttCallback(char* topic, byte* payload, unsigned int length)
+{
+    String msg;
+    msg.reserve(length);
+    for (unsigned int i = 0; i < length; i++)
+    {
+        msg += (char)payload[i];
+    }
+
+    String topicStr(topic);
+
+    if(topicStr == MQTTTopic_cmd())
+    {
+        CommandHandler_handle(msg);
+    }
+}
+
+// ======================
 // 初始化
 // ======================
 void MQTT_begin()
 {
     mqtt.setServer(MQTT_HOST, MQTT_PORT);
     mqtt.setCallback(mqttCallback);
-    mqtt.setBufferSize(1024);
+    mqtt.setBufferSize(512);
 }
 
 // ======================
@@ -31,6 +60,12 @@ void MQTT_begin()
 // ======================
 bool MQTT_connect()
 {
+    if(!WiFiManager_isConnected())
+    {
+        Serial.println("[MQTT] WiFi not ready");
+        return false;
+    }
+
     if(mqtt.connected())
         return true;
 
@@ -94,8 +129,10 @@ int MQTT_lastError()
 bool MQTT_publish(const String& topic,const String& payload)
 {
     if(!mqtt.connected())
+    {
         Serial.println("[MQTT] Publish Failed");
         return false;
+    }
 
     return mqtt.publish(topic.c_str(),payload.c_str());
 }
@@ -110,30 +147,7 @@ bool MQTT_publishResponse(const String& payload)
     return MQTT_publish(MQTTTopic_resp(),payload);
 }
 
-// ======================
-// subscribe（只提供接口）
-// ======================
-bool MQTT_subscribe(const String& topic)
-{
-    if(!mqtt.connected()) return false;
 
-    return mqtt.subscribe(topic.c_str());
-}
 
-static void mqttCallback(char* topic, byte* payload, unsigned int length)
-{
-    String msg;
-    msg.reserve(length);
-    for (unsigned int i = 0; i < length; i++)
-    {
-        msg += (char)payload[i];
-    }
 
-    String topicStr(topic);
-
-    if(topicStr == MQTTTopic_cmd())
-    {
-        CommandHandler_handle(msg);
-    }
-}
 

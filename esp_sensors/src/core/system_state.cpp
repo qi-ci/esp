@@ -44,9 +44,8 @@ SystemState g_systemState =
     0,
 
     false, false, false,
-    false, false, false,
 
-    "booting",
+    false, false, false, false, 
 
     5000,5000,5000,
 };

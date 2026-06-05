@@ -21,7 +21,7 @@ static bool g_ready = false;
 
 bool HTU21D_begin()
 {
-    // I2CManager_begin(21, 22);
+    I2CManager_beginI2C1(21, 22);
 
     g_ready = htu.begin();
 

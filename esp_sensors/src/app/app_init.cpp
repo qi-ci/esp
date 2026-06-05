@@ -26,18 +26,18 @@
 void App_init()
 {
     SystemInit();
-    WiFiManager_connect();
     SensorManager_begin();
+    
+    WiFiManager_connect();
     MQTT_begin();
+
     SystemHealth_begin();
+
+    Scheduler_begin();
 }
 
 void App_loop()
 {
-    SystemHealth_update();
-    SensorManager_update();
-    TelemetryManager_update();
-    
-    //串口监视器测试
-    SerialReporter_print();
+    Scheduler_update();
+    MQTT_loop();
 }

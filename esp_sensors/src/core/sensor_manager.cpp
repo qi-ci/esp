@@ -74,6 +74,10 @@ void SensorManager_begin()
     HTU21D_begin();
     ZE08_begin();
     S8_begin();
+
+    g_systemState.htuReady = HTU21D_isReady();
+    g_systemState.ze08Ready = ZE08_isReady();
+    g_systemState.s8Ready = S8_isReady();
 }
 
 // ======================

@@ -4,7 +4,7 @@
 // ======================
 // telemetry JSON
 // ======================
-String JSON_buildTelemetry(const SystemState& state, const String& sensor)
+String JSON_buildTelemetry(const String& sensorType, float value1, float value2, unsigned long timestamp)
 {
-    return OutputFormatter_buildTelemetry(state, sensor);
+    return OutputFormatter_buildTelemetry(sensorType, value1, value2, timestamp);
 }

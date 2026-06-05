@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-void I2CManager_begin(
+void I2CManager_beginI2C1(
     uint8_t sdaPin,
     uint8_t sclPin);
 

@@ -5,11 +5,11 @@ void WiFiManager_connect();
 
 bool WiFiManager_isConnected();
 
-void WiFiManager_reconfig();
+void WiFiManager_WifiUpdate();
 
-
-// -----------------------------
-// 新增接口：AP 配置模式
+// AP配置模式
 void WiFiManager_beginAPMode();
-// 新增WiFi测试连接（不保存）
+// AP配网
+void WiFiManager_NetAPModeConfig();
+// WiFi测试连接（不保存）
 bool WiFiManager_testConnect();

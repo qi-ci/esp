@@ -10,7 +10,7 @@
 // ======================
 // 健康状态
 // ======================
-static bool g_healthy = true;
+static bool g_healthy = false;
 
 // ======================
 // 异常计数器
@@ -23,8 +23,8 @@ static uint32_t mqttFailCount = 0;
 // 配置阈值
 // ======================
 static const uint8_t SENSOR_FAIL_LIMIT = 5;
-static const uint8_t WIFI_FAIL_LIMIT   = 5;
-static const uint8_t MQTT_FAIL_LIMIT   = 5;
+static const uint8_t WIFI_FAIL_LIMIT = 5;
+static const uint8_t MQTT_FAIL_LIMIT = 5;
 
 // ======================
 // 初始化
@@ -49,10 +49,12 @@ static void checkSensors()
     if(!ok)
     {
         sensorFailCount++;
+        g_systemState.sensor_ok = false;
     }
     else
     {
         sensorFailCount = 0;
+        g_systemState.sensor_ok = true;
     }
 
     // ======================
@@ -63,7 +65,8 @@ static void checkSensors()
         Serial.println("[HEALTH] sensor recovery triggered");
 
         SensorManager_begin(); // 重新初始化传感器
-        sensorFailCount = 0;
+        if(ok)
+            sensorFailCount = 0;
     }
 }
 
@@ -77,10 +80,12 @@ static void checkWifi()
     if(!ok)
     {
         wifiFailCount++;
+        g_systemState.wifi_connected = false;
     }
     else
     {
         wifiFailCount = 0;
+        g_systemState.wifi_connected = true;
     }
 
     // ======================
@@ -90,8 +95,9 @@ static void checkWifi()
     {
         Serial.println("[HEALTH] wifi force reconnect");
 
-        WiFiManager_reconfig();
-        wifiFailCount = 0;
+        WiFiManager_connect();
+        if(WiFiManager_isConnected())
+            wifiFailCount = 0;
     }
 }
 
@@ -105,10 +111,12 @@ static void checkMQTT()
     if(!ok)
     {
         mqttFailCount++;
+        g_systemState.mqtt_connected = false;
     }
     else
     {
         mqttFailCount = 0;
+        g_systemState.mqtt_connected = true;
     }
 
     // ======================
@@ -119,26 +127,8 @@ static void checkMQTT()
         Serial.println("[HEALTH] mqtt force reconnect");
 
         MQTT_connect();
-        mqttFailCount = 0;
-    }
-}
-
-// ======================
-// 检查数据异常
-// ======================
-static void checkData()
-{
-    if(
-        Validator_temperature(g_systemState.temperature) ||
-        Validator_humidity(g_systemState.humidity) ||
-        Validator_co2(g_systemState.co2) ||
-        Validator_hcho(g_systemState.hcho)
-    )
-    {
-        Serial.println("[HEALTH] invalid sensor data detected");
-
-        // 降级策略：重启传感器
-        SensorManager_begin();
+        if(MQTT_isConnected())
+            mqttFailCount = 0;
     }
 }
 
@@ -149,22 +139,22 @@ void SystemHealth_update()
 {
     checkSensors();
     checkWifi();
-    checkData();
+    checkMQTT();
+    
+    // ======================
+    // 系统状态判断
+    // ======================
+    g_systemState.System_OK = 
+        g_systemState.sensor_ok && g_systemState.wifi_connected && g_systemState.mqtt_connected;
+
 
     // ======================
     // 综合健康判断
     // ======================
     g_healthy =
         sensorFailCount < SENSOR_FAIL_LIMIT &&
-        wifiFailCount < WIFI_FAIL_LIMIT;
-
-    if(g_healthy)
-    {
-        g_systemState.sensor_ok = true;
-        g_systemState.wifi_connected = true;
-        g_systemState.mqtt_connected = true;
-        g_systemState.deviceStatus = "running";
-    }
+        wifiFailCount < WIFI_FAIL_LIMIT &&
+        mqttFailCount < MQTT_FAIL_LIMIT;
 }
 
 // ======================
