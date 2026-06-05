@@ -12,4 +12,4 @@ void WiFiManager_beginAPMode();
 // AP配网
 void WiFiManager_NetAPModeConfig();
 // WiFi测试连接（不保存）
-bool WiFiManager_testConnect();
+bool WiFiManager_testConnect(const String& ssid, const String& password);

@@ -1,6 +1,6 @@
 #include "wifi_manager.h"
 
-#include "../config/wifi_storage.h"
+#include "../config/system_storage.h"
 #include "../network/wifi_ap_server.h"
 
 #include "../core/system_state.h"
@@ -50,16 +50,14 @@ void WiFiManager_WifiUpdate()
 // ==============================
 void WiFiManager_beginAPMode()
 {
-    WiFi.mode(WIFI_AP);                     // AP + STA 模式
+    WiFi.mode(WIFI_AP_STA);                     // AP + STA 模式
 
-    IPAddress local_ip(192,168,5,1);
-    IPAddress gateway(192,168,5,1);
-    IPAddress subnet(255,255,255,0);
-    WiFi.softAPConfig(local_ip, gateway, subnet);
+    // IPAddress local_ip(192,168,5,1);
+    // IPAddress gateway(192,168,5,1);
+    // IPAddress subnet(255,255,255,0);
+    // WiFi.softAPConfig(local_ip, gateway, subnet);
     
     WiFi.softAP("ESP32_Setup", "12345678");    // 启动AP
-    Serial.println("AP Mode started. Connect to WiFi 'ESP32_Setup' and configure network.");
-    Serial.print("AP SERVER: "); Serial.println(WiFi.softAPIP());
 }
 
 // ==============================
@@ -77,23 +75,20 @@ void WiFiManager_NetAPModeConfig()
 // ==============================
 // 工业级：WiFi测试连接（不保存）
 // ==============================
-bool WiFiManager_testConnect()
+bool WiFiManager_testConnect(const String& ssid, const String& password)
 {
-    WiFi.disconnect(true);
-    delay(100);
-
-    WiFi.begin(g_systemState.wifi_ssid.c_str(), g_systemState.wifi_password.c_str());
+    WiFi.mode(WIFI_AP_STA);  // 保持 AP + STA
+    WiFi.begin(ssid.c_str(), password.c_str());
 
     uint32_t start = millis();
-
-    while (millis() - start < 5000) // 5秒测试窗口
+    while (millis() - start < 10000)  // 最多尝试 10 秒
     {
-        if (WiFi.status() == WL_CONNECTED)
-        {
+        if (WiFi.status() == WL_CONNECTED) {
+            Serial.println("[WiFi] Connected to " + ssid);
             return true;
         }
-        delay(100);
+        delay(200);
     }
-
+    Serial.println("[WiFi] Connection failed to " + ssid);
     return false;
 }

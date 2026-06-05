@@ -5,6 +5,7 @@
 // Core Layer
 // ======================
 #include "../core/system_init.h"
+#include "../config/system_storage.h"
 #include "../core/sensor_manager.h"
 #include "../drivers/wifi_manager.h"
 #include "../core/system_health_manager.h"
@@ -26,6 +27,10 @@
 void App_init()
 {
     SystemInit();
+    SystemStorage_begin();
+    SystemStorage_loadWiFi();
+    SystemStorage_loadIntervals();
+
     SensorManager_begin();
     
     WiFiManager_connect();

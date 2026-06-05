@@ -1,11 +1,30 @@
-#include "wifi_storage.h"
+#include "system_storage.h"
 #include <Preferences.h>
 #include "../core/system_state.h"
+
+void SystemStorage_begin()
+{
+    // ======================
+    // 初始化NVS分区
+    // ======================
+    static Preferences prefs;
+    bool ok = prefs.begin("system_config", false);
+
+    if(!ok)
+    {
+        Serial.println("[NVS] init failed");
+        return;
+    }
+
+    Serial.println("[NVS] ready");
+    
+    prefs.end(); // 关键：这里只是测试初始化，不长期占用
+}
 
 // ======================
 // WiFi保存
 // ======================
-void WiFiStorage_saveWiFi()
+void SystemStorage_saveWiFi()
 {
     Preferences prefs;
     prefs.begin("esp_config", false);   // 每次打开
@@ -19,7 +38,7 @@ void WiFiStorage_saveWiFi()
 // ======================
 // WiFi读取
 // ======================
-bool WiFiStorage_loadWiFi()
+bool SystemStorage_loadWiFi()
 {
     Preferences prefs;
     prefs.begin("esp_config", true);   // 只读模式
@@ -42,7 +61,7 @@ bool WiFiStorage_loadWiFi()
 // ======================
 // 采样间隔保存
 // ======================
-void WiFiStorage_saveIntervals()
+void SystemStorage_saveIntervals()
 {
     Preferences prefs;
     prefs.begin("esp_config", false);
@@ -57,7 +76,7 @@ void WiFiStorage_saveIntervals()
 // ======================
 // 采样间隔读取
 // ======================
-bool WiFiStorage_loadIntervals()
+bool SystemStorage_loadIntervals()
 {
     Preferences prefs;
     prefs.begin("esp_config", true);

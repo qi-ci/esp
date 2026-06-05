@@ -5,7 +5,7 @@
 #include "../app/output_formatter.h"
 #include "../network/mqtt_client.h"
 #include "../drivers/wifi_manager.h"
-#include "../config/wifi_storage.h"
+#include "../config/system_storage.h"
 
 #include <ArduinoJson.h>
 
@@ -62,10 +62,10 @@ void CommandHandler_handle(const String& jsonCmd)
 
             WiFiManager_connect();
 
-            bool ok = WiFiManager_testConnect();
+            bool ok = WiFiManager_testConnect(ssid,password);
 
             // ✅ 保存到 NVS
-            if(true) WiFiStorage_saveWiFi();
+            if(true) SystemStorage_saveWiFi();
 
             response = OutputFormatter_buildResponse(
                 ok ? "ok" : "fail",
@@ -126,19 +126,19 @@ void CommandHandler_handle(const String& jsonCmd)
         if (sensor == "htu")
         {
             g_systemState.htu_interval = value;
-            WiFiStorage_saveIntervals(); // ✅ 持久化
+            SystemStorage_saveIntervals(); // ✅ 持久化
             response = OutputFormatter_buildResponse("ok", "htu interval updated");
         }
         else if (sensor == "ze08")
         {
             g_systemState.ze08_interval = value;
-            WiFiStorage_saveIntervals(); // ✅ 持久化
+            SystemStorage_saveIntervals(); // ✅ 持久化
             response = OutputFormatter_buildResponse("ok", "ze08 interval updated");
         }
         else if (sensor == "s8")
         {
             g_systemState.s8_interval = value;
-            WiFiStorage_saveIntervals(); // ✅ 持久化
+            SystemStorage_saveIntervals(); // ✅ 持久化
             response = OutputFormatter_buildResponse("ok", "s8 interval updated");
         }
         else
@@ -157,7 +157,7 @@ void CommandHandler_handle(const String& jsonCmd)
         g_systemState.s8_interval   = 5000;
 
         // ✅ 持久化
-        WiFiStorage_saveIntervals();
+        SystemStorage_saveIntervals();
 
         response = OutputFormatter_buildResponse("ok", "interval reset");
     }
