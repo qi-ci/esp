@@ -5,7 +5,9 @@
 #include "sensor_manager.h"
 #include "../drivers/wifi_manager.h"
 #include "../network/mqtt_client.h"
+#include "../network/mqtt_broker.h"
 #include "../processing/data_validator.h"
+
 
 // ======================
 // 健康状态
@@ -49,12 +51,12 @@ static void checkSensors()
     if(!ok)
     {
         sensorFailCount++;
-        g_systemState.sensor_ok = false;
+        Serial.println("sensors error!");
     }
     else
     {
         sensorFailCount = 0;
-        g_systemState.sensor_ok = true;
+        Serial.println("sensors running");
     }
 
     // ======================
@@ -80,12 +82,12 @@ static void checkWifi()
     if(!ok)
     {
         wifiFailCount++;
-        g_systemState.wifi_connected = false;
+        Serial.println("wifi disconencted!");
     }
     else
     {
         wifiFailCount = 0;
-        g_systemState.wifi_connected = true;
+        Serial.println("wifi connected, ssid: " + g_systemState.wifi_ssid + ", password: " + g_systemState.wifi_password);
     }
 
     // ======================
@@ -111,12 +113,12 @@ static void checkMQTT()
     if(!ok)
     {
         mqttFailCount++;
-        g_systemState.mqtt_connected = false;
+        Serial.println("mqtt disconnected");
     }
     else
     {
         mqttFailCount = 0;
-        g_systemState.mqtt_connected = true;
+        Serial.println("mqtt connected");
     }
 
     // ======================
@@ -125,7 +127,6 @@ static void checkMQTT()
     if(mqttFailCount >= MQTT_FAIL_LIMIT)
     {
         Serial.println("[HEALTH] mqtt force reconnect");
-
         MQTT_connect();
         if(MQTT_isConnected())
             mqttFailCount = 0;
@@ -138,13 +139,21 @@ static void checkMQTT()
 void SystemHealth_update()
 {
     checkSensors();
+    if(g_systemState.htuReady && g_systemState.ze08Ready && g_systemState.s8Ready)
+        g_systemState.sensor_ok = true;
+    
     checkWifi();
+    if(WiFiManager_isConnected())
+        g_systemState.wifi_connected = true;
+
     checkMQTT();
+    if(MQTT_isConnected())
+        g_systemState.mqtt_connected = true;
     
     // ======================
     // 系统状态判断
     // ======================
-    g_systemState.System_OK = 
+    g_systemState.system_ok = 
         g_systemState.sensor_ok && g_systemState.wifi_connected && g_systemState.mqtt_connected;
 
 

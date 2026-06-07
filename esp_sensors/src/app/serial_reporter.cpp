@@ -72,6 +72,9 @@
 #include "serial_reporter.h"
 #include "output_formatter.h"
 #include "../core/system_state.h"  // 引入全局 g_systemState
+
+#include "../network/mqtt_client.h"
+
 #include <Arduino.h>
 
 void SerialReporter_print()
@@ -79,3 +82,9 @@ void SerialReporter_print()
     // 直接使用全局状态
     Serial.println(OutputFormatter_buildDebug());
 }
+
+void MQTT_AutoPublish()
+{
+    MQTT_publishTelemetry(OutputFormatter_buildFullTelemetry());
+}
+

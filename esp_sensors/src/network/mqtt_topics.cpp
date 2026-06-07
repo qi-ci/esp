@@ -1,6 +1,5 @@
 #include "mqtt_topics.h"
-#include "../config/network_config.h"
-#include "../config/device_config.h"
+#include "../config/mqttserver_config.h"
 #include "../core/system_state.h"
 
 // ======================

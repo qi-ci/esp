@@ -87,7 +87,7 @@ void CommandHandler_handle(const String& jsonCmd)
             ",Humi=" + String(g_systemState.humidity) +
             ",CO2=" + String(g_systemState.co2) +
             ",HCHO=" + String(g_systemState.hcho) +
-            ",State=" + String(g_systemState.System_OK)
+            ",State=" + String(g_systemState.system_ok)
         );
     }
 

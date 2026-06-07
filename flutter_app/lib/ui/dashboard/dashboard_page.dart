@@ -53,7 +53,7 @@ class _DashboardPageState extends State<DashboardPage> {
     "wifi": "Connected",
     "mqtt": "Connected",
     "uptime": "12h 35m",
-    "fw": "v1.0.3",
+    // "fw": "v1.0.3",
   };
 
   /// 传感器数据

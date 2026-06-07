@@ -1,6 +1,6 @@
 #include "mqtt_client.h"
 
-#include "../config/network_config.h"
+#include "../config/mqttserver_config.h"
 #include "../core/system_state.h"
 
 #include "../drivers/wifi_manager.h"
@@ -51,8 +51,13 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length)
 void MQTT_begin()
 {
     mqtt.setServer(MQTT_HOST, MQTT_PORT);
+    
     mqtt.setCallback(mqttCallback);
+    
     mqtt.setBufferSize(512);
+
+    mqtt.setKeepAlive(60);
+    mqtt.setSocketTimeout(15);
 }
 
 // ======================
@@ -84,7 +89,7 @@ bool MQTT_connect()
     }
     else
     {
-        Serial.printf("[MQTT] Connect Failed state=%d\n",mqtt.state());
+        Serial.println("[MQTT] Connect Failed state=" + mqtt.state());
     }
 
     return ok;
@@ -130,7 +135,6 @@ bool MQTT_publish(const String& topic,const String& payload)
 {
     if(!mqtt.connected())
     {
-        Serial.println("[MQTT] Publish Failed");
         return false;
     }
 

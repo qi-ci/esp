@@ -14,3 +14,5 @@
 #pragma once
 
 void SerialReporter_print();
+
+void MQTT_AutoPublish();

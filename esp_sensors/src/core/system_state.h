@@ -76,7 +76,7 @@ struct SystemState
     bool sensor_ok;
     bool wifi_connected;
     bool mqtt_connected;
-    bool System_OK;
+    bool system_ok;
 
     // ---- 采样间隔(ms) ----
     uint32_t htu_interval;

@@ -10,8 +10,6 @@
 #include "../drivers/wifi_manager.h"
 #include "../core/system_health_manager.h"
 
-#include "../core/telemetry_manager.h"
-
 // ======================
 // Network Layer
 // ======================
@@ -24,6 +22,9 @@
 
 #include "../scheduler/task_scheduler.h"
 
+// #include "../network/mqtt_broker.h"
+
+
 void App_init()
 {
     SystemInit();
@@ -34,9 +35,18 @@ void App_init()
     SensorManager_begin();
     
     WiFiManager_connect();
+    delay(500);   // ⭐ WiFi稳定
+
+    // broker.begin(); // broker服务器，启动 MQTT 服务器，监听端口 1883
+    // delay(300);   // ⭐关键：给 TCP server 启动时间
+
     MQTT_begin();
+    delay(200);   // ⭐关键：再等一层稳定
+    MQTT_connect();
+    delay(300);
 
     SystemHealth_begin();
+    SystemHealth_update();
 
     Scheduler_begin();
 }

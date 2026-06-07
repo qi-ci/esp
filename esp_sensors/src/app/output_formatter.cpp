@@ -39,26 +39,27 @@
 // ======================
 // MQTT Telemetry JSON
 // ======================
-String OutputFormatter_buildTelemetry(const String& sensorType, float value1, float value2, unsigned long timestamp)
+String OutputFormatter_buildFullTelemetry()
 {
-    String j = "{";
-    j += "\"sensor\":\"" + sensorType + "\"";
-    if(sensorType == "htu")
-    {
-        j += ",\"temp\":" + String(value1);
-        j += ",\"humi\":" + String(value2);
-    }
-    else if(sensorType == "ze08")
-    {
-        j += ",\"co2\":" + String(value1);
-    }
-    else if(sensorType == "s8")
-    {
-        j += ",\"hcho\":" + String(value1);
-    }
+    unsigned long seconds = millis() / 1000;
+    unsigned long hours = seconds / 3600;
+    unsigned long minutes = (seconds % 3600) / 60;
 
-    j += ",\"time\":" + String(timestamp);
+    String j = "{";
+
+    j += "\"temp\":" + String(g_systemState.temperature) + ",";
+    j += "\"humi\":" + String(g_systemState.humidity) + ",";
+    j += "\"co2\":"  + String(g_systemState.co2) + ",";
+    j += "\"hcho\":" + String(g_systemState.hcho) + ",";
+
+    j += "\"sensors\":\"" + String(g_systemState.sensor_ok ? "Running" : "Error") + "\",";
+    j += "\"wifi\":\"" + String(g_systemState.wifi_connected ? "Connected" : "Disconnected") + "\",";
+    j += "\"mqtt\":\"" + String(g_systemState.mqtt_connected ? "Connected" : "Disconnected") + "\",";
+
+    j += "\"uptime\":\"" + String(hours) + "h " + String(minutes) + "m\"";
+
     j += "}";
+
     return j;
 }
 
@@ -94,7 +95,7 @@ String OutputFormatter_buildDebug()
     t += "\n";
 
     t += "System OK: ";
-    t += g_systemState.System_OK ? "YES" : "NO";
+    t += g_systemState.system_ok ? "YES" : "NO";
 
     t += "\n=====================\n";
     return t;

@@ -7016,3 +7016,204 @@ MQTT / App
 
 > 🔥 **商业级 ESP32 IoT 多任务实时系统（接近工业设备架构）**
 
+
+要看你使用的 MQTT 库。
+
+从你之前的项目结构来看，大概率使用的是 **PubSubClient**，那么：
+
+### 情况1：使用默认保活时间
+
+如果你的代码是：
+
+```cpp
+mqttClient.connect(clientId);
+```
+
+或者：
+
+```cpp
+mqttClient.connect(clientId, user, pass);
+```
+
+那么实际上已经有 KeepAlive 了。
+
+PubSubClient 默认：
+
+```cpp
+MQTT_KEEPALIVE = 15
+```
+
+即：
+
+```text
+15秒
+```
+
+所以这种情况下：
+
+```cpp
+mqttClient.loop();
+```
+
+会自动发送心跳包。
+
+不需要额外写：
+
+```cpp
+mqttClient.connect(..., 60);
+```
+
+---
+
+### 情况2：想修改保活时间
+
+PubSubClient推荐写法是：
+
+```cpp
+mqttClient.setKeepAlive(60);
+```
+
+例如在：
+
+```cpp
+mqtt_client.cpp
+```
+
+连接前：
+
+```cpp
+void MQTT_begin()
+{
+    mqttClient.setServer(
+        MQTT_BROKER,
+        MQTT_PORT
+    );
+
+    mqttClient.setKeepAlive(60);
+}
+```
+
+然后：
+
+```cpp
+mqttClient.connect(clientId);
+```
+
+即可。
+
+---
+
+### 情况3：你的代码中检查一下
+
+看看是否有：
+
+```cpp
+PubSubClient mqttClient;
+```
+
+然后搜索：
+
+```cpp
+setKeepAlive
+```
+
+如果有：
+
+```cpp
+mqttClient.setKeepAlive(60);
+```
+
+那已经设置了。
+
+如果没有：
+
+```cpp
+默认15秒
+```
+
+---
+
+### 对你当前项目的建议
+
+ESP32环境监测仪属于：
+
+```text
+低频数据上传
+1s
+2s
+5s
+一次
+```
+
+不是高实时系统。
+
+推荐：
+
+```cpp
+mqttClient.setKeepAlive(30);
+```
+
+或者：
+
+```cpp
+mqttClient.setKeepAlive(60);
+```
+
+即可。
+
+然后保持：
+
+```cpp
+mqttClient.loop();
+```
+
+在主循环持续执行：
+
+```cpp
+void loop()
+{
+    WiFiManager_loop();
+
+    MQTT_loop();
+
+    SensorManager_loop();
+
+    SystemHealthManager_loop();
+}
+```
+
+---
+
+### 你的项目最合理的配置
+
+Flutter：
+
+```dart
+client.keepAlivePeriod = 20;
+```
+
+ESP32：
+
+```cpp
+mqttClient.setKeepAlive(60);
+```
+
+主循环：
+
+```cpp
+MQTT_loop();   // 每50~100ms执行一次
+```
+
+这样：
+
+```text
+Flutter → 20秒心跳
+
+ESP32 → 60秒心跳
+
+Broker → 正常维持两条连接
+
+ESP32 → 50ms轮询处理MQTT消息
+```
+
+完全没有问题，也不需要把 Flutter 和 ESP32 的 KeepAlive 设置成一样。实际上很多生产环境中，APP 端是 30 秒，设备端是 60~120 秒，都很常见。
