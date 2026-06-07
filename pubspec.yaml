@@ -12,6 +12,8 @@ dependencies:
   flutter:
     sdk: flutter
 
+  mqtt_client: ^10.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

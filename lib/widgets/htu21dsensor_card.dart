@@ -1,30 +1,51 @@
 import 'package:flutter/material.dart';
-
 /// ============================
 /// 🌡️ 通用传感器卡片
 /// ============================
 ///
 /// 用于：
-/// CO2 / HCHO
+/// HTU21D
 ///
 /// 特点：
 /// ✔ 标题
 /// ✔ 数值
 /// ✔ 单位
 /// ✔ 刷新按钮
-class SensorCard extends StatelessWidget {
+class HTU21DSensorCard extends StatelessWidget {
   final String title;
-  final String value;
-  final String unit;
+  final String value1;
+  final String value2;
+  final String unit1;
+  final String unit2;
   final VoidCallback onRefresh;
 
-  const SensorCard({
+  const HTU21DSensorCard({
     super.key,
     required this.title,
-    required this.value,
-    required this.unit,
+    required this.value1,
+    required this.unit1,
+    required this.value2,
+    required this.unit2,
     required this.onRefresh,
   });
+
+  @override
+  Widget _buildValueRow(String value, String unit) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          value,
+          style: TextStyle(fontSize: 18),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          unit,
+          style: TextStyle(fontSize: 18),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,29 +62,14 @@ class SensorCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Sensor 名称变大
                   Text(
-                    title, // 只显示传感器名，不写 "Sensor: " 也可以加
+                    title,
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-
-                  const SizedBox(height: 6),
-
-                  // Value 和 Unit 同一行显示
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        value,
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        unit,
-                        style: TextStyle(fontSize: 18),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: 8),
+                  _buildValueRow(value1, unit1),
+                  const SizedBox(height: 8),
+                  _buildValueRow(value2, unit2),
                 ],
               ),
             ),
@@ -71,8 +77,8 @@ class SensorCard extends StatelessWidget {
             IconButton(
               onPressed: onRefresh,
               icon: Icon(Icons.refresh),
-            ),
-          ],
+            )
+          ]
         ),
       ),
     );
