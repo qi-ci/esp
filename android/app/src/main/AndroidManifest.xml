@@ -1,8 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET"/> <!--internet open-->
+
     <application
-        android:label="esp32_air_monitor"
+        android:label="AirMonitor"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/LaunchTheme"
+        android:usesCleartextTraffic="true"> <!--cleartext open-->
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -32,8 +32,8 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 📌 Mock 配置数据
   /// ==========================
 
-  String deviceId = "ESP32-001";
-  String mqttBroker = "192.168.1.100";
+  String deviceId = "airmon_livingroom";
+  String mqttBroker = "104.168.81.179";
   bool autoRefresh = true;
   String timezone = "UTC+8";
 

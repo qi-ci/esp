@@ -1,4 +1,4 @@
-package com.example.esp32_air_monitor
+package com.example.air_monitor
 
 import io.flutter.embedding.android.FlutterActivity
 
