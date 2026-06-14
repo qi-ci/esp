@@ -1,9 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import 'pages/dashboard_page.dart';
 import 'pages/settings_page.dart';
 
+import 'core/settings_manager.dart';
+
+
+
 void main() {
-  runApp(const AirMonitorApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SettingsManager()),
+      ],
+      child: const AirMonitorApp(),
+    ),
+  );
 }
 
 class AirMonitorApp extends StatelessWidget {

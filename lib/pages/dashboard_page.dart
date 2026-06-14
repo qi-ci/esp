@@ -10,6 +10,9 @@ import '../services/mqtt_service.dart';
 import '../models/sensor_data.dart';
 import '../models/device_status.dart';
 
+import 'package:provider/provider.dart';
+import '../core/settings_manager.dart';
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -20,9 +23,9 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   late MQTTService mqttService;
 
-  String time = "2026-06-02 10:30";
-  String country = "USA";
-  String city = "Buffalo";
+  // String time = "Unknown";
+  // String country = "Unknown";
+  // String city = "Unknown";
 
   DeviceStatus deviceStatus = DeviceStatus(
     sensors: " ",
@@ -38,6 +41,22 @@ class _DashboardPageState extends State<DashboardPage> {
     co2: 0,
     hcho: 0,
   );
+
+  String formatTimeByTimezone(String timezone) {
+    final now = DateTime.now().toUtc();
+
+    int offset = 8;
+
+    if (timezone.contains("+")) {
+      offset = int.parse(timezone.split("+")[1]);
+    } else if (timezone.contains("-")) {
+      offset = -int.parse(timezone.split("-")[1]);
+    }
+
+    final localTime = now.add(Duration(hours: offset));
+
+    return DateFormat("yyyy-MM-dd HH:mm:ss").format(localTime);
+  }
 
   double parseNum(dynamic v) => (v as num).toDouble();
 
@@ -71,6 +90,17 @@ class _DashboardPageState extends State<DashboardPage> {
 
       await mqttService.initTls("assets/certs/ca.crt");
       await mqttService.connect();
+
+      // 每秒更新时间
+      Future.doWhile(() async {
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return false;
+
+        Provider.of<SettingsManager>(context, listen: false)
+            .updateTime(DateTime.now());
+
+        return true;
+      });
     })();
   }
 
@@ -82,6 +112,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = Provider.of<SettingsManager>(context);
     return Scaffold(
       appBar: AppBar(title: const Text("Air Monitor"), centerTitle: true),
       body: SingleChildScrollView(
@@ -89,8 +120,14 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(12),
           child: Column(
             children: [
-              LocationCard(time: time, country: country, city: city),
+              // LocationCard(time: time, country: country, city: city),
+              LocationCard(
+                time: formatTimeByTimezone(settings.timezone),
+                country: settings.country,
+                city: settings.city,
+              ),
               const SizedBox(height: 8),
+
               DeviceStatusCard(
                 sensors: deviceStatus.sensors,
                 wifi: deviceStatus.wifi,
@@ -99,6 +136,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 lastUpdate: deviceStatus.lastUpdate,
               ),
               const SizedBox(height: 8),
+
               HTU21DSensorCard(
                 title: "HTU21D",
                 value1: "Temp: ${sensorData.temperature}",

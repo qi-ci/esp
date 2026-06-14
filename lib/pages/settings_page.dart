@@ -4,6 +4,9 @@ import '../widgets/device_settings_card.dart';
 import '../widgets/data_settings_card.dart';
 import '../widgets/timelocation_settings_card.dart';
 
+import 'package:provider/provider.dart';
+import '../core/settings_manager.dart';
+
 /// ==============================
 /// ⚙️ Settings Page（设置页面）
 /// ==============================
@@ -28,14 +31,14 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
 
-  /// ==========================
-  /// 📌 Mock 配置数据
-  /// ==========================
-
+  // /// ==========================
+  // /// 📌 Mock 配置数据
+  // /// ==========================
+  //
   String deviceId = "airmon_livingroom";
   String mqttBroker = "104.168.81.179";
   bool autoRefresh = true;
-  String timezone = "UTC+8";
+  // String timezone = "UTC+8";
 
   final TextEditingController htuController = TextEditingController();
   final TextEditingController s8Controller = TextEditingController();
@@ -49,6 +52,8 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
 
+    final settings = Provider.of<SettingsManager>(context, listen: false);
+
     // 初始化默认值
     htuController.text = "1000";   // ms
     s8Controller.text = "2000";    // ms
@@ -57,8 +62,8 @@ class _SettingsPageState extends State<SettingsPage> {
     ssidController.text = "MyWiFi";
     passwordController.text = "12345678";
 
-    countyController.text = "China";
-    cityController.text = "Henan";
+    countyController.text = settings.country;
+    cityController.text = settings.city;
   }
 
   // 回调
@@ -79,7 +84,14 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _saveLocation() {
-    print("Save Location: ${countyController.text}, Password: ${cityController.text}");
+    // print("Save Location: ${countyController.text}, Password: ${cityController.text}");
+    final settings = Provider.of<SettingsManager>(context, listen: false);
+
+    settings.updateLocation(
+      country: countyController.text,
+      city: cityController.text,
+      timezone: settings.timezone,
+    );
   }
 
 
@@ -92,6 +104,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = Provider.of<SettingsManager>(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text("Settings"),
@@ -144,8 +157,16 @@ class _SettingsPageState extends State<SettingsPage> {
             /// ③ timeLocation Settings
             /// ==========================
             TimeLocationSettingsCard(
-              timezone: timezone,
-              onTimezoneChanged: (v) => setState(() => timezone = v),
+              timezone: settings.timezone,
+              // timezone: timezone,
+              // onTimezoneChanged: (v) => setState(() => timezone = v),
+              onTimezoneChanged: (v) {
+                settings.updateLocation(
+                  country: countyController.text,
+                  city: cityController.text,
+                  timezone: v,
+                );
+              },
 
               countyController: countyController,
               cityController: cityController,
